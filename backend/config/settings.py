@@ -32,6 +32,7 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     'clinical_records',
+    'etl',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
