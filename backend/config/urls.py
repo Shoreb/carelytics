@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from clinical_records.views import PatientViewSet
+from clinical_records.views import PatientViewSet, DashboardKPIView
 
 # Creamos el router y registramos nuestro ViewSet
 router = DefaultRouter()
@@ -25,6 +25,8 @@ router.register(r'pacientes', PatientViewSet, basename='paciente')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Ruta específica para los KPIs
+    path('api/dashboard/kpis/', DashboardKPIView.as_view(), name='dashboard-kpis'),
     # Todas las URLs generadas por el router irán bajo /api/
     path('api/', include(router.urls)),
 ]
