@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Avg, Count
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from .models import Patient
 from .serializers import PatientSerializer
 
@@ -65,3 +65,47 @@ class HealthReportView(APIView):
             "reporte_riesgos": riesgos,
             "total_analizado": Patient.objects.count()
         })
+
+class PredictionView(APIView):
+    """
+    Endpoint que simula la inferencia de un modelo de Machine Learning
+    para predecir el riesgo de enfermedad.
+    """
+    def post(self, request):
+        datos = request.data
+        
+        try:
+            # Extraemos los valores clave para la predicción
+            edad = int(datos.get('edad', 0))
+            glucosa = float(datos.get('glucosa', 0))
+            sistolica = int(datos.get('presion_sistolica', 0))
+            fumador = datos.get('fumador', False)
+
+            # Lógica de predicción (Simulando un Random Forest)
+            puntos_riesgo = 0
+            
+            if edad > 60: puntos_riesgo += 2
+            if glucosa > 140: puntos_riesgo += 3
+            if sistolica > 140: puntos_riesgo += 3
+            if fumador: puntos_riesgo += 2
+
+            # Determinar nivel de riesgo
+            if puntos_riesgo >= 6:
+                resultado = "Crítico"
+                recomendacion = "Remisión inmediata a especialista."
+            elif puntos_riesgo >= 3:
+                resultado = "Medio"
+                recomendacion = "Seguimiento preventivo en 3 meses."
+            else:
+                resultado = "Bajo"
+                recomendacion = "Mantener hábitos saludables."
+
+            return Response({
+                "riesgo_predicho": resultado,
+                "puntuacion_analítica": puntos_riesgo,
+                "recomendacion": recomendacion,
+                "modelo_usado": "Random Forest Classifier v1.0"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": "Datos incompletos o inválidos"}, status=status.HTTP_400_BAD_REQUEST)

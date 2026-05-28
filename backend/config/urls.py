@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from clinical_records.views import PatientViewSet, DashboardKPIView, HealthReportView
+from clinical_records.views import PatientViewSet, DashboardKPIView, HealthReportView, PredictionView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -40,6 +40,8 @@ urlpatterns = [
     path('api/etl/run/', ETLRunView.as_view(), name='etl-run'),
     # Endpoint de Reportes
     path('api/reportes/', HealthReportView.as_view(), name='health-reports'),
+    # Endpoint de Predicciones
+    path('api/predicciones/', PredictionView.as_view(), name='paciente-prediccion'),
     # Todas las URLs generadas por el router irán bajo /api/
     path('api/', include(router.urls)),
 ]
