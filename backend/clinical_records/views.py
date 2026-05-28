@@ -38,3 +38,30 @@ class DashboardKPIView(APIView):
         }
         
         return Response(data)
+
+class HealthReportView(APIView):
+    """
+    Vista para generar reportes de distribución diagnóstica y demográfica.
+    """
+    def get(self, request):
+        # 1. Distribución por Diagnóstico
+        diagnosticos = Patient.objects.values('diagnostico_preliminar').annotate(
+            total=Count('diagnostico_preliminar')
+        ).order_by('-total')
+
+        # 2. Distribución por Sexo
+        generos = Patient.objects.values('sexo').annotate(
+            total=Count('sexo')
+        )
+
+        # 3. Distribución por Riesgo
+        riesgos = Patient.objects.values('riesgo_enfermedad').annotate(
+            total=Count('riesgo_enfermedad')
+        )
+
+        return Response({
+            "reporte_diagnosticos": diagnosticos,
+            "reporte_generos": generos,
+            "reporte_riesgos": riesgos,
+            "total_analizado": Patient.objects.count()
+        })
