@@ -22,6 +22,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from etl.views import ETLRunView
 
 # Creamos el router y registramos nuestro ViewSet
 router = DefaultRouter()
@@ -35,6 +36,8 @@ urlpatterns = [
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # Ruta específica para los KPIs
     path('api/dashboard/kpis/', DashboardKPIView.as_view(), name='dashboard-kpis'),
+    # Endpoint de ejecución ETL
+    path('api/etl/run/', ETLRunView.as_view(), name='etl-run'),
     # Todas las URLs generadas por el router irán bajo /api/
     path('api/', include(router.urls)),
 ]
