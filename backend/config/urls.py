@@ -18,6 +18,10 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from clinical_records.views import PatientViewSet, DashboardKPIView
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 # Creamos el router y registramos nuestro ViewSet
 router = DefaultRouter()
@@ -25,6 +29,10 @@ router.register(r'pacientes', PatientViewSet, basename='paciente')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Endpoint de Login (Obtener el token)
+    path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # Endpoint para refrescar el token (cuando caduque)
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # Ruta específica para los KPIs
     path('api/dashboard/kpis/', DashboardKPIView.as_view(), name='dashboard-kpis'),
     # Todas las URLs generadas por el router irán bajo /api/
