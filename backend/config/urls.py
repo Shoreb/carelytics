@@ -24,6 +24,12 @@ from rest_framework_simplejwt.views import (
 )
 from etl.views import ETLRunView
 
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView
+)
+
 # Creamos el router y registramos nuestro ViewSet
 router = DefaultRouter()
 router.register(r'pacientes', PatientViewSet, basename='paciente')
@@ -44,4 +50,10 @@ urlpatterns = [
     path('api/predicciones/', PredictionView.as_view(), name='paciente-prediccion'),
     # Todas las URLs generadas por el router irán bajo /api/
     path('api/', include(router.urls)),
+    # Endpoints Automáticos del Esquema de Documentación OpenAPI 3.0
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    
+    # Interfaces Visuales Interactivas para Pruebas del Equipo de Desarrollo
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
