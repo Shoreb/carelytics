@@ -23,6 +23,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from etl.views import ETLRunView
+from django.views.generic import TemplateView
 
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -56,4 +57,12 @@ urlpatterns = [
     # Interfaces Visuales Interactivas para Pruebas del Equipo de Desarrollo
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+
+   path('login/', TemplateView.as_view(template_name='login.html'), name='frontend_login'),
+    
+    # Vista del Dashboard Analítico Interactivo
+    path('dashboard/', TemplateView.as_view(template_name='dashboard.html'), name='frontend_dashboard'),
+    
+    # Redirección global automática al Login
+    path('', TemplateView.as_view(template_name='login.html'), name='frontend_home'),
 ]
