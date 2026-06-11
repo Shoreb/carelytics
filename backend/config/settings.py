@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'clinical_records',
     'etl',
+    'ml',
+    'authentication',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -192,3 +194,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Directorio donde se guardan los modelos ML serializados (.pkl)
+ML_MODELS_DIR = os.path.join(BASE_DIR, 'ml_models')
