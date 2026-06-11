@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'etl',
     'ml',
     'authentication',
+    'dashboard',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

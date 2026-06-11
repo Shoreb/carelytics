@@ -32,6 +32,7 @@ urlpatterns = [
     path('api/auth/token/refresh/',  TokenRefreshView.as_view(),          name='token_refresh'),
 
     # ── Dashboard ──────────────────────────────────────────────────────────
+    path('api/dashboard/', include('dashboard.urls')),
     path('api/dashboard/kpis/',      DashboardKPIView.as_view(),          name='dashboard-kpis'),
 
     # ── ETL ────────────────────────────────────────────────────────────────
