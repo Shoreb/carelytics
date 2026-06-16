@@ -121,36 +121,9 @@ const DashboardController = (() => {
         }
     };
 
-    // Gestión de eventos para las llamadas a procesos masivos
-    const setupEventListeners = () => {
-        const btnEtl = document.getElementById('btn-run-etl');
-        const btnReporte = document.getElementById('btn-download-report');
-
-        if (btnEtl) {
-            btnEtl.addEventListener('click', async () => {
-                try {
-                    btnEtl.disabled = true;
-                    btnEtl.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Ingiriendo Datos...`;
-                    
-                    const result = await fetchWithAuth('/api/etl/run/', { method: 'POST' });
-                    alert(`Pipeline completado con éxito. Registros clínicos procesados de forma limpia: ${result.procesados}`);
-                    location.reload();
-                } catch (error) {
-                    alert('Error en la ejecución del Pipeline ETL clínico.');
-                    btnEtl.disabled = false;
-                    btnEtl.innerHTML = `<i class="fa-solid fa-rotate me-2"></i>Ejecutar Pipeline ETL`;
-                }
-            });
-        }
-
-        if (btnReporte) {
-            btnReporte.addEventListener('click', () => {
-                const token = AuthManager.getToken();
-                // Descarga de archivos inyectando el token JWT firmado
-                window.open(`/api/reportes/?token=${token}`, '_blank');
-            });
-        }
-    };
+    // Gestión de eventos — movida a dashboard.html (setupETLButtons / setupMLButtons)
+    // Se mantiene como no-op para no romper la llamada en init().
+    const setupEventListeners = () => {};
 
     const init = () => {
         applyRoleVisibilities();

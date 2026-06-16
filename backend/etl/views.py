@@ -140,6 +140,7 @@ class ETLRunView(APIView):
         TRANSFORM: Limpieza extrema, conversión de tipos e imputación estadística.
         """
         import pandas as pd  # lazy import
+        import numpy as np   # lazy import
         from etl import exploracion as ex
 
         # 1. Renombrar columnas al esquema interno
@@ -163,11 +164,12 @@ class ETLRunView(APIView):
 
         # 2. Eliminar duplicados y filas sin identificación
         df = df.drop_duplicates(subset=['identificacion'], keep='first')
+        n_sin_duplicados = len(df)
         df = df.dropna(subset=['identificacion'])
         df = df[df['identificacion'].astype(str).str.strip() != '']
 
-        duplicados = total_original - len(df)
-        invalidos = (total_original - duplicados) - len(df)
+        duplicados = total_original - n_sin_duplicados
+        invalidos  = n_sin_duplicados - len(df)  # filas sin ID válida
 
         # 3. Concatenar nombres y apellidos
         df['nombre'] = (
