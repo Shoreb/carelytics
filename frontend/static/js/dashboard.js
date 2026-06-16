@@ -30,21 +30,11 @@ const DashboardController = (() => {
     };
 
     // Control de visibilidad de botones críticos según el rol institucional (RBAC)
-    const applyRoleVisibilities = () => {
-        const role = AuthManager.getUserRole();
-        const btnEtl = document.getElementById('btn-run-etl');
-        const btnReporte = document.getElementById('btn-download-report');
-
-        // El médico no tiene autorización operacional sobre los pipelines ETL de datos crudos
-        if (role === 'medico' && btnEtl) {
-            btnEtl.remove(); 
-        }
-
-        // El analista no gestiona la descarga de reportes críticos de historias médicas individuales
-        if (role === 'analista' && btnReporte) {
-            btnReporte.remove();
-        }
-    };
+    // NOTA: La lógica de visibilidad por rol ahora vive en dashboard.html
+    // mediante atributos data-roles + applyRoleVisibility(), que refleja
+    // la matriz completa de permisos (Administrador/Médico/Analista).
+    // Esta función se mantiene como no-op para no romper la llamada en init().
+    const applyRoleVisibilities = () => {};
 
     // Carga asíncrona de contadores KPI en el DOM
     const loadKPIs = async () => {
@@ -63,16 +53,25 @@ const DashboardController = (() => {
     // Renderizado de gráficos interactivos usando Chart.js
     const renderCharts = async () => {
         try {
-            const data = await fetchWithAuth('/api/pacientes/');
+            const data = await fetchWithAuth('/api/dashboard/kpis/');
+
+            if (!data || data.total_pacientes === 0) {
+                console.warn('Sin datos de pacientes. Ejecuta el ETL primero.');
+                return;
+            }
 
             // Gráfico 1: Distribución de Riesgos Clínicos (Torta)
+            const porRiesgo = data.por_riesgo || {};
+            const riesgoLabels = ['Bajo', 'Medio', 'Alto', 'Crítico'];
+            const riesgoData = riesgoLabels.map(r => porRiesgo[r] || 0);
+
             const ctxRiesgos = document.getElementById('chart-riesgos').getContext('2d');
             new Chart(ctxRiesgos, {
                 type: 'pie',
                 data: {
-                    labels: ['Bajo', 'Medio', 'Alto', 'Crítico'],
+                    labels: riesgoLabels,
                     datasets: [{
-                        data: data.distribucion_riesgos || [650, 450, 400, 300], // Fallback simulado del volumen de datos
+                        data: riesgoData,
                         backgroundColor: ['#198754', '#ffc107', '#fd7e14', '#dc3545'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
@@ -87,15 +86,19 @@ const DashboardController = (() => {
                 }
             });
 
-            // Gráfico 2: Prevalencia de Diagnósticos Clínicos Críticos (Barras)
+            // Gráfico 2: Top diagnósticos
+            const porDiagnostico = data.por_diagnostico || [];
+            const diagLabels = porDiagnostico.map(d => d.diagnostico_preliminar);
+            const diagData = porDiagnostico.map(d => d.n);
+
             const ctxDiagnosticos = document.getElementById('chart-diagnosticos').getContext('2d');
             new Chart(ctxDiagnosticos, {
                 type: 'bar',
                 data: {
-                    labels: ['Hipertensión', 'Diabetes', 'Obesidad', 'Arritmia', 'Sanos'],
+                    labels: diagLabels.length ? diagLabels : ['Sin datos'],
                     datasets: [{
                         label: 'Número de Pacientes',
-                        data: data.prevalencia_diagnosticos || [380, 290, 480, 150, 500], 
+                        data: diagData.length ? diagData : [0],
                         backgroundColor: '#0d6efd',
                         borderRadius: 6
                     }]
