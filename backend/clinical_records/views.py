@@ -18,6 +18,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Patient
 from .serializers import PatientSerializer
+from authentication.permissions import QueryParamJWTAuthentication
 
 
 # ── Pacientes ─────────────────────────────────────────────────────────────────
@@ -45,27 +46,92 @@ class DashboardKPIView(APIView):
     def get(self, request):
         qs = Patient.objects.all()
         total = qs.count()
-        if total == 0: return Response({'total_pacientes': 0})
-        
-        stats = qs.aggregate(imc_promedio=Avg('imc'), glucosa_promedio=Avg('glucosa'), ps_promedio=Avg('presion_sistolica'))
-        por_riesgo = dict(qs.values('riesgo_enfermedad').annotate(n=Count('id')).values_list('riesgo_enfermedad', 'n'))
-        
+        if total == 0:
+            return Response({'total_pacientes': 0})
+
+        stats = qs.aggregate(
+            imc_promedio=Avg('imc'),
+            glucosa_promedio=Avg('glucosa'),
+            ps_promedio=Avg('presion_sistolica'),
+        )
+        por_riesgo = dict(
+            qs.values('riesgo_enfermedad').annotate(n=Count('id')).values_list('riesgo_enfermedad', 'n')
+        )
+
+        # Pacientes críticos según criterios clínicos (no solo el campo riesgo)
+        pacientes_criticos = qs.filter(
+            Q(presion_sistolica__gt=180) |
+            Q(glucosa__gt=300) |
+            Q(saturacion_oxigeno__lt=85)
+        ).count()
+
+        hipertensos = qs.filter(presion_sistolica__gt=140).count()
+        diabeticos  = qs.filter(glucosa__gt=126).count()
+        fumadores   = qs.filter(fumador=True).count()
+
+        # Riesgo promedio en escala 1 (Bajo) - 4 (Crítico)
+        mapeo_riesgo = {'Bajo': 1, 'Medio': 2, 'Alto': 3, 'Crítico': 4}
+        riesgo_promedio = round(
+            sum(mapeo_riesgo.get(r, 1) * n for r, n in por_riesgo.items()) / total, 2
+        ) if total else 0
+
+        # Distribución por sexo
+        por_sexo = dict(
+            qs.values('sexo').annotate(n=Count('id')).values_list('sexo', 'n')
+        )
+
+        # Distribución por grupos de edad
+        grupos_edad = {
+            '0-17':  qs.filter(edad__lt=18).count(),
+            '18-35': qs.filter(edad__gte=18, edad__lte=35).count(),
+            '36-50': qs.filter(edad__gte=36, edad__lte=50).count(),
+            '51-65': qs.filter(edad__gte=51, edad__lte=65).count(),
+            '65+':   qs.filter(edad__gt=65).count(),
+        }
+
+        # Top 5 diagnósticos
+        por_diagnostico = list(
+            qs.values('diagnostico_preliminar')
+              .annotate(n=Count('id'))
+              .order_by('-n')[:5]
+              .values('diagnostico_preliminar', 'n')
+        )
+
         return Response({
-            'total_pacientes': total,
-            'por_riesgo': por_riesgo,
-            'estadisticas': {'imc': round(stats['imc_promedio'] or 0, 2), 'glucosa': round(stats['glucosa_promedio'] or 0, 2)}
+            'total_pacientes':    total,
+            'pacientes_criticos': pacientes_criticos,
+            'riesgo_promedio':    riesgo_promedio,
+            'hipertensos':        hipertensos,
+            'diabeticos':         diabeticos,
+            'fumadores':          fumadores,
+            'por_riesgo':         por_riesgo,
+            'por_sexo':           por_sexo,
+            'grupos_edad':        grupos_edad,
+            'por_diagnostico':    por_diagnostico,
+            'estadisticas': {
+                'imc':     round(stats['imc_promedio'] or 0, 2),
+                'glucosa': round(stats['glucosa_promedio'] or 0, 2),
+                'presion_sistolica': round(stats['ps_promedio'] or 0, 2),
+            }
         })
 
 
 # ── Reportes (PDF / Excel / CSV) ──────────────────────────────────────────────
 
 class HealthReportView(APIView):
+    """
+    GET /api/reportes/?formato=json|csv|excel|pdf
+    Accepts JWT via Authorization header (normal API use) OR via ?token=
+    query param (needed for browser file downloads triggered by window.open).
+    """
+    authentication_classes = [QueryParamJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         formato = request.query_params.get('formato', 'json').lower()
         if formato == 'csv': return self._exportar_csv()
         if formato == 'excel': return self._exportar_excel()
+        if formato == 'pdf': return self._exportar_pdf()
         return Response({"mensaje": "Reporte listo"})
 
     def _exportar_csv(self):
@@ -89,6 +155,75 @@ class HealthReportView(APIView):
         buffer.seek(0)
         response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="reporte.xlsx"'
+        return response
+
+    def _exportar_pdf(self):
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        qs = Patient.objects.all()
+        total = qs.count()
+
+        por_riesgo = list(
+            qs.values('riesgo_enfermedad').annotate(n=Count('id')).order_by('-n')
+        )
+        stats = qs.aggregate(
+            glucosa=Avg('glucosa'),
+            colesterol=Avg('colesterol'),
+            presion=Avg('presion_sistolica'),
+            imc=Avg('imc'),
+        )
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=40)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        elements.append(Paragraph('Carelytics — Reporte Clínico', styles['Title']))
+        elements.append(Paragraph(f'Fecha: {date.today()} | Total pacientes: {total}', styles['Normal']))
+        elements.append(Spacer(1, 16))
+
+        elements.append(Paragraph('Promedios generales', styles['Heading2']))
+        data_stats = [
+            ['Indicador', 'Promedio'],
+            ['Glucosa (mg/dL)', f"{stats['glucosa'] or 0:.1f}"],
+            ['Colesterol (mg/dL)', f"{stats['colesterol'] or 0:.1f}"],
+            ['Presión Sistólica (mmHg)', f"{stats['presion'] or 0:.1f}"],
+            ['IMC', f"{stats['imc'] or 0:.2f}"],
+        ]
+        t1 = Table(data_stats, colWidths=[220, 100])
+        t1.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6728b1')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f3eeff')]),
+        ]))
+        elements.append(t1)
+        elements.append(Spacer(1, 20))
+
+        elements.append(Paragraph('Distribución por nivel de riesgo', styles['Heading2']))
+        data_riesgo = [['Nivel de riesgo', 'Pacientes', '% del total']]
+        for r in por_riesgo:
+            pct = round(r['n'] / total * 100, 1) if total else 0
+            data_riesgo.append([r['riesgo_enfermedad'], str(r['n']), f"{pct}%"])
+
+        t2 = Table(data_riesgo, colWidths=[180, 100, 100])
+        t2.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#619438')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(t2)
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="reporte_carelytics_{date.today()}.pdf"'
         return response
 
 
