@@ -4,14 +4,17 @@ Vista ETL: ejecuta el pipeline completo y guarda el log de cada ejecución.
 Patrón arquitectónico: Command Pattern.
 La API dispara una operación compleja encapsulada, que puede rastrearse
 y reproducirse gracias al ETLLog.
+
+Nota de rendimiento: pandas y numpy se importan dentro de los métodos
+(_extraer, _transformar) para evitar que Gunicorn los cargue al arrancar
+el proceso, lo que en instancias con poca RAM (ej. Render Free 512MB)
+causa SIGKILL antes de que el servidor esté listo.
 """
 
 import os
 import time
 import traceback
 
-import pandas as pd
-import numpy as np  # <-- Agregado para poder manejar los valores nulos (np.nan)
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -21,7 +24,6 @@ from rest_framework.parsers import MultiPartParser, JSONParser
 
 from clinical_records.models import Patient
 from etl.models import ETLLog
-from etl import exploracion as ex
 
 
 # Ruta base al directorio de datasets (relativa al backend/)
@@ -108,6 +110,8 @@ class ETLRunView(APIView):
         EXTRACT: lee el DataFrame desde archivo subido o dataset por defecto.
         Retorna (DataFrame, nombre_fuente).
         """
+        import pandas as pd  # lazy import — no carga al arrancar gunicorn
+
         archivo = request.FILES.get('archivo')
         if archivo:
             nombre = archivo.name
@@ -135,6 +139,9 @@ class ETLRunView(APIView):
         """
         TRANSFORM: Limpieza extrema, conversión de tipos e imputación estadística.
         """
+        import pandas as pd  # lazy import
+        from etl import exploracion as ex
+
         # 1. Renombrar columnas al esquema interno
         mapeo = {
             'id_paciente':          'identificacion',

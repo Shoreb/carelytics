@@ -1,23 +1,14 @@
 """
 Módulo de entrenamiento del modelo de Machine Learning.
+
+Nota de rendimiento: pandas, numpy y scikit-learn se importan dentro de
+las funciones que los necesitan (entrenar_modelo, predecir) para evitar
+cargarlos al arrancar gunicorn, lo que en instancias con poca RAM
+(ej. Render Free 512MB) causa SIGKILL antes de que el servidor responda.
 """
 
 import os
-import joblib
-import numpy as np
-import pandas as pd
-
 from django.conf import settings
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score,
-    f1_score, confusion_matrix
-)
 
 
 # ── Rutas ─────────────────────────────────────────────────────────────────────
@@ -37,6 +28,11 @@ TARGET = 'riesgo_enfermedad'
 
 
 def _get_pipeline():
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import ColumnTransformer
+    from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
     preprocessor = ColumnTransformer(transformers=[
         ('num', StandardScaler(), NUMERIC_FEATURES),
         ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), CATEGORICAL_FEATURES),
@@ -53,7 +49,12 @@ def _get_pipeline():
 
 
 def entrenar_modelo():
+    import joblib
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
     from clinical_records.models import Patient
+
     os.makedirs(MODELS_DIR, exist_ok=True)
 
     qs = Patient.objects.values(*ALL_FEATURES, TARGET)
@@ -82,9 +83,11 @@ def entrenar_modelo():
 
 
 def _calcular_metricas(y_test, y_pred, pipeline, X_train):
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+
     labels = sorted(list(set(y_test)))
     clf = pipeline.named_steps['classifier']
-    
+
     return {
         'accuracy': round(accuracy_score(y_test, y_pred), 4),
         'precision': round(precision_score(y_test, y_pred, average='weighted', zero_division=0), 4),
@@ -95,6 +98,8 @@ def _calcular_metricas(y_test, y_pred, pipeline, X_train):
     }
 
 def predecir(df_input) -> dict:
+    import joblib
+
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError("Modelo no entrenado.")
 
