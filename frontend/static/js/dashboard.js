@@ -45,6 +45,15 @@ const DashboardController = (() => {
             document.getElementById('kpi-pacientes-criticos').innerText = data.pacientes_criticos || '0';
             document.getElementById('kpi-riesgo-promedio').innerText = data.riesgo_promedio || 'N/A';
             document.getElementById('kpi-ml-accuracy').innerText = data.ml_accuracy ? `${(data.ml_accuracy * 100).toFixed(1)}%` : '85.4%';
+            console.log(document.getElementById('kpi-hipertensos'))
+            document.getElementById('kpi-hipertensos').innerText =
+                data.hipertensos || 0;
+
+            document.getElementById('kpi-diabeticos').innerText =
+                data.diabeticos || 0;
+
+            document.getElementById('kpi-fumadores').innerText =
+                data.fumadores || 0;
         } catch (error) {
             console.error('Error cargando los KPIs analíticos del backend:', error);
         }
