@@ -94,7 +94,7 @@
     }
     .hero-title {
       font-size: clamp(2.5rem, 5vw, 3.5rem);
-      font-weight: 700;
+      font-weight: 800;
       line-height: 1.1;
       margin-bottom: 1.5rem;
     }
@@ -141,7 +141,7 @@
     }
     .section-sub {
       font-size: clamp(1.1rem, 2vw, 1.5rem); color: var(--ink-soft);
-      max-width: 520px; line-height: 1.7;
+      max-width: 782px; line-height: 1.7;
     }
     .section--dark .section-sub  { color: #b8afd6; }
     .section--dark .section-title { color: var(--white); }
@@ -158,7 +158,7 @@
     }
     .problem-title {
       font-size: clamp(2.2rem, 5vw, 3.5rem);
-      font-weight: 800;
+      font-weight: 700;
       line-height: 1.1;
     }
     .problem-subtitle {
