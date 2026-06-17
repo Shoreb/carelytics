@@ -168,9 +168,11 @@ function setupETLButtons() {
       if (result && result.estado === 'exitoso') {
         toast(`ETL completado — ${result.registros_cargados} registros cargados en ${result.tiempo_segundos}s`);
         updateETLStats(result);
+        renderColumnReport(result.columnas_reconocidas, result.columnas_ignoradas);
         loadETLHistory();
       } else {
         toast(result?.error || 'Error en el ETL', 'error');
+        hideColumnReport();
       }
     } catch (e) {
       toast('Error de conexión con el servidor', 'error');
@@ -196,6 +198,57 @@ function updateETLStats(result) {
   document.getElementById('etl-stat-leidos').textContent     = result.registros_leidos ?? '—';
   document.getElementById('etl-stat-cargados').textContent   = result.registros_cargados ?? '—';
   document.getElementById('etl-stat-duplicados').textContent = result.registros_duplicados ?? '—';
+}
+
+/* ── Reporte de mapeo de columnas (útil para datasets externos) ───── */
+function renderColumnReport(reconocidas, ignoradas) {
+  let card = document.getElementById('column-report-card');
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'column-report-card';
+    card.className = 'card';
+    card.style.marginBottom = '1.5rem';
+    const statsGrid = document.getElementById('etl-stats-grid');
+    statsGrid.insertAdjacentElement('afterend', card);
+  }
+
+  const reconocidasHtml = (reconocidas || []).map(c =>
+    `<span class="col-chip col-chip--ok"><i class="fa-solid fa-check fa-xs"></i> ${c}</span>`
+  ).join('');
+
+  const ignoradasHtml = (ignoradas && ignoradas.length)
+    ? (ignoradas || []).map(c =>
+        `<span class="col-chip col-chip--warn"><i class="fa-solid fa-circle-question fa-xs"></i> ${c}</span>`
+      ).join('')
+    : '<span style="font-size:.8rem;color:var(--muted);">Ninguna — todas las columnas del archivo fueron reconocidas.</span>';
+
+  card.innerHTML = `
+    <div class="card__header">
+      <div>
+        <div class="card__title">Mapeo de columnas del archivo</div>
+        <div class="card__sub">Así interpretó el sistema las columnas de tu dataset</div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem;">
+      <p style="font-size:.78rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem;">
+        Reconocidas (${(reconocidas || []).length})
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;">${reconocidasHtml}</div>
+    </div>
+    <div>
+      <p style="font-size:.78rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem;">
+        Ignoradas (${(ignoradas || []).length})
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;">${ignoradasHtml}</div>
+      ${(ignoradas && ignoradas.length) ? '<p style="font-size:.75rem;color:var(--muted);margin-top:.6rem;">Estas columnas no se reconocieron como un campo clínico del sistema y no se cargaron. Si esperabas que se usaran, verifica el nombre de la columna en tu archivo.</p>' : ''}
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+function hideColumnReport() {
+  const card = document.getElementById('column-report-card');
+  if (card) card.style.display = 'none';
 }
 
 async function loadETLHistory() {
