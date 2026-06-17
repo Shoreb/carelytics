@@ -62,7 +62,7 @@ class ETLRunView(APIView):
             log.registros_leidos = len(df)
 
             # ── 2. TRANSFORM ──────────────────────────────────────────────────
-            df_limpio, duplicados, invalidos = self._transformar(df)
+            df_limpio, duplicados, invalidos, reporte_columnas = self._transformar(df)
             log.registros_duplicados = duplicados
             log.registros_invalidos = invalidos
 
@@ -84,9 +84,21 @@ class ETLRunView(APIView):
                 'registros_cargados': log.registros_cargados,
                 'tiempo_segundos': float(log.tiempo_ejecucion_seg),
                 'log_id': log.id,
+                'columnas_reconocidas': reporte_columnas['reconocidas'],
+                'columnas_ignoradas': reporte_columnas['ignoradas'],
             }, status=status.HTTP_201_CREATED)
 
         except FileNotFoundError as e:
+            log.estado = ETLLog.EstadoChoices.FALLIDO
+            log.mensaje_error = str(e)
+            log.tiempo_ejecucion_seg = round(time.time() - inicio, 3)
+            log.save()
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except ValueError as e:
+            # Errores de validación de datos (ej. columna ID no detectada,
+            # dataset vacío tras limpieza) — son errores del usuario/archivo,
+            # no bugs del sistema, así que se reportan como 400 con mensaje claro.
             log.estado = ETLLog.EstadoChoices.FALLIDO
             log.mensaje_error = str(e)
             log.tiempo_ejecucion_seg = round(time.time() - inicio, 3)
@@ -138,27 +150,86 @@ class ETLRunView(APIView):
     def _transformar(self, df):
         """
         TRANSFORM: Limpieza extrema, conversión de tipos e imputación estadística.
+
+        Detección flexible de columnas: en vez de exigir nombres exactos
+        (ej. 'id_paciente'), se reconoce cualquier alias razonable en
+        español o inglés (ej. 'patient_id', 'id', 'paciente_id'), y se
+        normalizan mayúsculas/tildes/espacios antes de comparar. Esto
+        permite procesar datasets externos sin que el usuario tenga que
+        renombrar columnas manualmente.
         """
         import pandas as pd  # lazy import
         import numpy as np   # lazy import
+        import unicodedata
         from etl import exploracion as ex
 
-        # 1. Renombrar columnas al esquema interno
-        mapeo = {
-            'id_paciente':          'identificacion',
-            'presión_sistólica':    'presion_sistolica',
-            'presion_sistolica':    'presion_sistolica',
-            'presión_diastólica':   'presion_diastolica',
-            'presion_diastolica':   'presion_diastolica',
-            'frecuencia_cardiaca':  'frecuencia_cardiaca',
-            'actividad_física':     'actividad_fisica',
-            'actividad_fisica':     'actividad_fisica',
-            'diagnóstico_preliminar': 'diagnostico_preliminar',
-            'diagnostico_preliminar': 'diagnostico_preliminar',
-            'saturación_oxígeno':   'saturacion_oxigeno',
-            'saturacion_oxigeno':   'saturacion_oxigeno',
+        def normalizar_nombre_columna(col):
+            """minúsculas, sin tildes, espacios/guiones → guión bajo."""
+            col = str(col).strip().lower()
+            col = unicodedata.normalize('NFKD', col).encode('ascii', 'ignore').decode('utf-8')
+            col = col.replace(' ', '_').replace('-', '_')
+            while '__' in col:
+                col = col.replace('__', '_')
+            return col
+
+        # Alias reconocidos por campo interno. Se compara contra el nombre
+        # de columna ya normalizado (minúsculas, sin tildes).
+        ALIAS = {
+            'identificacion': ['id_paciente', 'patient_id', 'id', 'paciente_id', 'identificacion', 'documento', 'cedula'],
+            'nombres': ['nombres', 'first_name', 'nombre', 'primer_nombre'],
+            'apellidos': ['apellidos', 'last_name', 'apellido', 'primer_apellido'],
+            'edad': ['edad', 'age'],
+            'sexo': ['sexo', 'gender', 'genero', 'sex'],
+            'peso': ['peso', 'weight', 'weight_kg', 'peso_kg'],
+            'altura': ['altura', 'height', 'height_m', 'estatura', 'talla'],
+            'presion_sistolica': ['presion_sistolica', 'presion_sistolica_mmhg', 'systolic_bp', 'systolic', 'presion_arterial_sistolica'],
+            'presion_diastolica': ['presion_diastolica', 'diastolic_bp', 'diastolic', 'presion_arterial_diastolica'],
+            'frecuencia_cardiaca': ['frecuencia_cardiaca', 'heart_rate', 'pulso', 'pulse'],
+            'glucosa': ['glucosa', 'glucose_level', 'glucose', 'glicemia'],
+            'colesterol': ['colesterol', 'cholesterol_level', 'cholesterol'],
+            'saturacion_oxigeno': ['saturacion_oxigeno', 'oxygen_saturation', 'spo2', 'sat_oxigeno'],
+            'temperatura': ['temperatura', 'body_temp_c', 'body_temperature', 'temp', 'temp_c'],
+            'antecedentes_familiares': ['antecedentes_familiares', 'family_history', 'antecedentes'],
+            'fumador': ['fumador', 'is_smoker', 'smoker', 'fuma'],
+            'consumo_alcohol': ['consumo_alcohol', 'drinks_alcohol', 'alcohol', 'bebe_alcohol'],
+            'actividad_fisica': ['actividad_fisica', 'activity_level', 'actividad'],
+            'diagnostico_preliminar': ['diagnostico_preliminar', 'diagnosis', 'diagnostico'],
+            'fecha_consulta': ['fecha_consulta', 'visit_date', 'fecha', 'consultation_date'],
         }
-        df = df.rename(columns={k: v for k, v in mapeo.items() if k in df.columns})
+
+        # Normalizar nombres de columnas del DataFrame de entrada
+        columnas_originales = {col: normalizar_nombre_columna(col) for col in df.columns}
+        df = df.rename(columns=columnas_originales)
+
+        # Construir el mapeo real: para cada campo interno, buscar el primer
+        # alias presente en el dataset y renombrarlo al nombre interno.
+        renombrar = {}
+        columnas_reconocidas = []
+        for campo_interno, alias_list in ALIAS.items():
+            for alias in alias_list:
+                alias_norm = normalizar_nombre_columna(alias)
+                if alias_norm in df.columns and alias_norm != campo_interno:
+                    renombrar[alias_norm] = campo_interno
+                    columnas_reconocidas.append(campo_interno)
+                    break
+                elif alias_norm in df.columns and alias_norm == campo_interno:
+                    columnas_reconocidas.append(campo_interno)
+                    break
+
+        df = df.rename(columns=renombrar)
+
+        # Columnas del archivo que no se pudieron mapear a ningún campo interno
+        campos_internos = set(ALIAS.keys())
+        columnas_ignoradas = [c for c in df.columns if c not in campos_internos]
+
+        # ── VALIDACIÓN TEMPRANA: sin columna de identificación, no se puede continuar ──
+        if 'identificacion' not in df.columns:
+            raise ValueError(
+                "No se pudo identificar la columna de ID del paciente. "
+                "El archivo debe incluir una columna como 'id_paciente', 'patient_id', "
+                "'id', 'documento' o 'cedula'. "
+                f"Columnas encontradas en el archivo: {list(columnas_originales.values())}"
+            )
 
         total_original = len(df)
 
@@ -167,9 +238,17 @@ class ETLRunView(APIView):
         n_sin_duplicados = len(df)
         df = df.dropna(subset=['identificacion'])
         df = df[df['identificacion'].astype(str).str.strip() != '']
+        df = df[df['identificacion'].astype(str).str.strip().str.lower() != 'nan']
 
         duplicados = total_original - n_sin_duplicados
         invalidos  = n_sin_duplicados - len(df)  # filas sin ID válida
+
+        if len(df) == 0:
+            raise ValueError(
+                "Tras la limpieza no quedó ningún registro válido. "
+                "Verifica que la columna de identificación del paciente "
+                "tenga valores no nulos y no vacíos."
+            )
 
         # 3. Concatenar nombres y apellidos
         df['nombre'] = (
@@ -177,6 +256,8 @@ class ETLRunView(APIView):
             + ' '
             + df.get('apellidos', pd.Series([''] * len(df))).fillna('').astype(str).str.strip()
         ).str.strip()
+        # Si no hay nombres/apellidos en absoluto, usar la identificación como nombre visible
+        df.loc[df['nombre'] == '', 'nombre'] = 'Paciente ' + df['identificacion'].astype(str)
 
         # -----------------------------------------------------------------------------
         # 4. LIMPIEZA EXTREMA: Conversión forzada de texto a nulo (La "trampa")
@@ -263,7 +344,12 @@ class ETLRunView(APIView):
         # 9. Traducción final a Django: cualquier posible NaN residual se vuelve None
         df = df.replace({np.nan: None})
 
-        return df, duplicados, invalidos
+        reporte_columnas = {
+            'reconocidas': sorted(set(columnas_reconocidas)),
+            'ignoradas': sorted(set(columnas_ignoradas)),
+        }
+
+        return df, duplicados, invalidos, reporte_columnas
 
     def _cargar(self, df):
         """
