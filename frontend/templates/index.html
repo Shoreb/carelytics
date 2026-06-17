@@ -56,7 +56,7 @@
                         médica, detecta pacientes en riesgo y entrega
                         inteligencia clínica accionable.
                     </p>
-                    <a href="/login/" class="btn hero-btn">Ver como funciona</a>
+                    <a href="/login/" class="btn hero-btn-grad">Ver como funciona</a>
                 </div>
             </div>
             <!-- Imagen -->
@@ -117,7 +117,7 @@
   <div style="max-width:1100px;margin:0 auto">
     <div class="solution-layout">
       <div class="solution-text">
-        <h2 class="section-title">Un pipeline inteligente de extremo a extremo.</h2>
+        <h2 class="section-title">Conecta, Limpia y Predice.</h2>
         <p class="section-sub">
           Carelytics implementa un proceso ETL clínico completo, seguido de analítica
           estadística y un modelo de Machine Learning entrenado sobre datos reales —
@@ -159,7 +159,7 @@
 <!-- ══════════════════════════════════════════════════════════
      FEATURES
 ══════════════════════════════════════════════════════════ -->
-<section class="section section--green" id="features">
+<section class="section section--white" id="features">
   <div style="max-width:1100px;margin:0 auto">
     <h2 class="section-title text-center text-lg-start">Todo lo que su IPS necesita en una sola plataforma.</h2>
     <div class="features-grid">
@@ -183,8 +183,7 @@
         <h3>Predicción de Riesgo con IA</h3>
         <p>
           Un modelo Random Forest entrenado sobre datos clínicos reales clasifica a cada
-          paciente en cuatro niveles de riesgo: Bajo, Medio, Alto y Crítico —
-          con métricas de accuracy, F1-Score y matriz de confusión incluidas.
+          paciente en cuatro niveles de riesgo: Bajo, Medio, Alto y Crítico.
         </p>
         <a href="/login/" class="feature-link">
           Ver predicciones <i class="fa-solid fa-arrow-right fa-xs"></i>
@@ -197,7 +196,7 @@
         <h3>Dashboard Clínico</h3>
         <p>
           KPIs en tiempo real: pacientes críticos, hipertensos, diabéticos, distribución
-          de IMC, segmentación por edad y sexo. Gráficas interactivas con Chart.js y
+          de IMC, segmentación por edad y sexo. Gráficas interactivas y
           exportación a PDF, Excel o CSV.
         </p>
         <a href="/login/" class="feature-link">
@@ -217,7 +216,7 @@
     <h2 class="section-title">Impacto medible desde el primer día.</h2>
     
     <p class="section-sub" style="margin: 0 auto 3.5rem auto;">
-      Carelytics no es solo tecnología — es una ventaja clínica concreta
+      Carelytics no es solo tecnología — es una <strong>ventaja clínica</strong> concreta
       para los equipos médicos y administrativos de su institución.
     </p>
 
@@ -225,16 +224,19 @@
       <div class="benefit-card">
         <i class="bi bi-stopwatch-fill"></i>
         <h4>Tiempo en limpieza de datos</h4>
+        <br>
         <p>Lo que antes tomaba horas de trabajo manual se resuelve en segundos con el pipeline ETL automatizado.</p>
       </div>
       <div class="benefit-card">
         <i class="bi bi-lightning-charge-fill"></i>
-        <h4>Mayor velocidad de detección de riesgo</h4>
+        <h4>Velocidad de detección de riesgo</h4>
+        <br>
         <p>El modelo ML procesa y clasifica gran cantidad de pacientes en cuestión de segundos, priorizando automáticamente los casos críticos.</p>
       </div>
       <div class="benefit-card">
         <i class="bi bi-shield-check"></i>
         <h4>Trazabilidad del proceso clínico</h4>
+        <br>
         <p>Cada ejecución ETL queda registrada con usuario, fecha, registros procesados y errores detectados — listo para auditoría.</p>
       </div>
     </div>
@@ -269,7 +271,7 @@
       <div class="footer-brand">
         <img src="{% static 'img/clogo.png' %}" alt="Carelytics" style="width:180px;height:auto;opacity:.85;" />
         <p>Plataforma inteligente de analítica clínica para IPS.<br/>
-        ETL automatizado · Machine Learning · Dashboards interactivos.</p>
+          Transformamos datos médicos en decisiones predictivas mediante ETL automatizado, Machine Learning y dashboards interactivos.</p>
       </div>
       <div class="footer-col">
         <h5>Inicio</h5>
@@ -280,9 +282,18 @@
           <li><a href="/login/">Reportes</a></li>
         </ul>
       </div>
+      <div class="footer-col">
+        <h5>Recursos</h5>
+        <ul>
+          <li><a href="/api/schema/swagger-ui/">Documentación</a></li>
+          <li><a href="mailto:soporte@carelytics.com">Soporte Técnico</a></li>
+          <li><a href="/login/">Términos y Condiciones</a></li>
+          <li><a href="/login/">Política de Privacidad</a></li>
+        </ul>
+      </div>
     </div>
-    <div class="footer-bottom">
-      <p>© 2026 Carelytics · Derechos reservados </p>
+    <div class="footer-bottom d-flex justify-content-center">
+      <p>© 2026 Carelytics. Todos los derechos reservados.</p>
     </div>
   </div>
 </footer>

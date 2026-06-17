@@ -4,6 +4,7 @@
       --green:        #619438;
       --green-light:  #7ab548;
       --green-pale:   #eef5e8;
+      --purple-pale:   #f1d2fd;
       --purple:       #6728b1;
       --purple-light: #7f3fd4;
       --purple-pale:  #f3eeff;
@@ -22,7 +23,7 @@
     html { scroll-behavior: smooth; }
     body {
       font-family: 'Space Grotesk', system-ui, sans-serif;
-      background: var(--surface);
+      background: var(--white);
       color: var(--ink);
       line-height: 1.6;
       overflow-x: hidden;
@@ -39,7 +40,7 @@
       margin: 0;
     }
     .logo {
-      width: 180px;
+      width: 232px;
       height: auto;
     }
     .nav-link {
@@ -50,17 +51,27 @@
     .nav-link:hover {
       color: #6f2dbd;
     }
+
     .ingresar-btn {
-      background: #6A963D;
-      color: white;
-      padding: .8rem 1.8rem;
-      border-radius: 50px;
-      font-weight: 500;
-    }
-    .ingresar-btn:hover {
-      background: #557c30;
-      color: white;
-    }
+  background-image: linear-gradient(to right, #6A963D 0%, #a8e063 51%, #6A963D 100%);
+}
+
+.ingresar-btn {
+  padding: .8rem 1.8rem;
+  font-weight: 500;
+  transition: 0.5s;
+  background-size: 200% auto;
+  color: white;
+  box-shadow: 0 0 20px #eee;
+  border-radius: 50px;
+}
+
+.ingresar-btn:hover {
+  background-position: right center;
+  color: #fff;
+  text-decoration: none;
+}
+  
     .cl-btn {
       background: #6f2dbd;
       color: white;
@@ -78,7 +89,7 @@
     /* ── HERO ─────────────────────────────────────────────────────── */
     .hero-section {
       background: #fafafa;
-      padding: 80px 0 120px;
+      padding: 80px 0 182px;
     }
     .hero-content {
       max-width: 550px;
@@ -103,17 +114,28 @@
       max-width: 550px;
       margin-bottom: 2.5rem;
     }
-    .hero-btn {
-      background: #6f2dbd;
-      color: white;
-      padding: 1rem 2rem;
-      border-radius: 10px;
-      font-weight: 600;
-    }
-    .hero-btn:hover {
-      background: #5e22a5;
-      color: white;
-    }
+
+.hero-btn-grad {
+  background-image: linear-gradient(to right, #6f2dbd 0%, #CF8BF3 51%, #6f2dbd 100%);
+}
+
+.hero-btn-grad {
+  margin: 10px;
+  padding: 1rem 2rem;
+  font-weight: 600;
+  transition: 0.5s;
+  background-size: 200% auto;
+  color: white;
+  box-shadow: 0 0 20px #eee;
+  border-radius: 10px;
+}
+
+.hero-btn-grad:hover {
+  background-position: right center;
+  color: #fff;
+  text-decoration: none;
+}
+
     .hero-image-container {
       position: relative;
       display: flex;
@@ -136,7 +158,7 @@
     .section--white { background: var(--white); }
     .section-title {
       font-size: clamp(1.8rem, 3vw, 3.5rem);
-      font-weight: 800; letter-spacing: -.025em;
+      font-weight: 700; letter-spacing: -.025em;
       line-height: 1.15; margin-bottom: 1rem;
     }
     .section-sub {
@@ -148,7 +170,7 @@
 
     /* ── Problema ─────────────────────────────────────────────────── */
     .problem-section {
-      background: #f6f6f6;
+      background: var(--purple-pale);
       padding: 80px 1.5rem;
       overflow: hidden;
     }
@@ -252,9 +274,9 @@
       font-size: .9rem; font-weight: 700; color: var(--white);
       position: relative; z-index: 1;
     }
-    .step-dot--extract   { background: var(--purple); }
-    .step-dot--transform { background: linear-gradient(135deg, var(--purple), var(--green)); }
-    .step-dot--load      { background: var(--green); }
+    .step-dot--extract   { background: var(--green); }
+    .step-dot--transform { background: linear-gradient(196deg, var(--green), var(--purple)); }
+    .step-dot--load      { background: var(--purple); }
     .step-body h4 { font-size: 1rem; font-weight: 700; color: var(--ink); margin-bottom: .3rem; }
     .step-body p  { font-size: .875rem; color: var(--ink-soft); line-height: 1.6; }
     .solution-text .section-sub { margin-bottom: 2rem; }
@@ -328,11 +350,12 @@
       display: inline-block;
     }
     .benefit-card h4 { font-size: 1rem; font-weight: 700; color: var(--ink); margin-bottom: .5rem; }
-    .benefit-card p { font-size: .875rem; color: var(--muted); line-height: 1.6; }
+    .benefit-card p { font-size: .875rem; color: var(--soft); line-height: 1.65; }
 
     /* ── Final CTA banner ─────────────────────────────────────────── */
     .cta-banner {
-      background: linear-gradient(135deg, var(--purple) 0%, #3b1070 50%, var(--ink) 100%);
+      background: #020024;
+      background: linear-gradient(90deg, rgba(2, 0, 36, 1) 43%, rgb(102 54 154) 100%);
       border-radius: 24px;
       padding: 4rem 3rem;
       text-align: center;
@@ -341,14 +364,7 @@
       margin: 0 auto 6rem;
       max-width: 1100px;
     }
-    .cta-banner::before {
-      content: '';
-      position: absolute;
-      top: -80px; right: -80px;
-      width: 300px; height: 300px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(97,148,56,.25) 0%, transparent 70%);
-    }
+
     .cta-banner h2 {
       font-size: clamp(1.7rem, 2.8vw, 2.4rem);
       font-weight: 800; letter-spacing: -.025em;
@@ -361,13 +377,14 @@
     .cl-footer {
       background: var(--ink);
       color: #b8afd6;
-      padding: 3rem 1.5rem;
+      padding: 1rem 1.5rem;
     }
     .footer-grid {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr 1fr;
       gap: 3rem;
       margin-bottom: 2.5rem;
+      align-items: center;
     }
     .footer-brand p { font-size: .875rem; line-height: 1.7; margin-top: .75rem; color: #8a82a8; }
     .footer-col h5 {
