@@ -310,10 +310,13 @@ async function loadPatients() {
       <td style="font-family:monospace;font-size:.78rem;">${p.identificacion}</td>
       <td style="font-weight:600;">${p.nombre}</td>
       <td>${p.edad}</td>
-      <td>${p.sexo === 'M' ? 'M' : p.sexo === 'F' ? 'F' : 'O'}</td>
-      <td>${p.imc ?? '—'}</td>
-      <td>${p.glucosa ?? '—'}</td>
+      <td>${p.sexo === 'M' ? 'Masc.' : p.sexo === 'F' ? 'Fem.' : 'Otro'}</td>
+      <td>${p.imc != null ? Number(p.imc).toFixed(1) : '—'}</td>
+      <td>${p.glucosa != null ? Number(p.glucosa).toFixed(1) : '—'}</td>
       <td>${p.presion_sistolica ?? '—'}</td>
+      <td>${p.presion_diastolica ?? '—'}</td>
+      <td>${p.saturacion_oxigeno != null ? Number(p.saturacion_oxigeno).toFixed(1) + '%' : '—'}</td>
+      <td>${p.frecuencia_cardiaca ?? '—'}</td>
       <td>${p.diagnostico_preliminar}</td>
       <td><span class="riesgo-badge ${riesgoCls[p.riesgo_enfermedad] || ''}">${p.riesgo_enfermedad}</span></td>
     </tr>
@@ -423,32 +426,156 @@ function setupMLButtons() {
   });
 
   document.getElementById('btn-predict').addEventListener('click', async () => {
-    const body = {
-      edad:                 parseInt(document.getElementById('ml-edad').value) || 0,
-      glucosa:              parseFloat(document.getElementById('ml-glucosa').value) || 0,
-      presion_sistolica:    parseInt(document.getElementById('ml-presion').value) || 0,
-      imc:                  parseFloat(document.getElementById('ml-imc').value) || 0,
-      colesterol:           parseFloat(document.getElementById('ml-colesterol').value) || 0,
-      saturacion_oxigeno:   parseFloat(document.getElementById('ml-saturacion').value) || 0,
-      frecuencia_cardiaca:  parseInt(document.getElementById('ml-frecuencia').value) || 0,
-      temperatura:          parseFloat(document.getElementById('ml-temperatura').value) || 0,
-      sexo:                 document.getElementById('ml-sexo').value,
-      actividad_fisica:     document.getElementById('ml-actividad').value,
-      fumador:              document.getElementById('ml-fumador').value === 'true',
-      antecedentes_familiares: document.getElementById('ml-antecedentes').value === 'true',
-      presion_diastolica:   80,
-      consumo_alcohol:      false,
+
+    // ── Rangos clínicos aceptables (mismos que exploracion.py) ──
+    const RANGOS = {
+      edad:               { min: 0,    max: 120,  label: 'Edad (años)' },
+      glucosa:            { min: 20,   max: 700,  label: 'Glucosa (mg/dL)' },
+      presion_sistolica:  { min: 40,   max: 250,  label: 'Presión Sistólica (mmHg)' },
+      presion_diastolica: { min: 20,   max: 150,  label: 'Presión Diastólica (mmHg)' },
+      imc:                { min: 8,    max: 80,   label: 'IMC' },
+      colesterol:         { min: 50,   max: 600,  label: 'Colesterol (mg/dL)' },
+      saturacion_oxigeno: { min: 50,   max: 100,  label: 'Saturación O₂ (%)' },
+      frecuencia_cardiaca:{ min: 20,   max: 220,  label: 'Frecuencia Cardíaca (bpm)' },
+      temperatura:        { min: 35,   max: 42,   label: 'Temperatura (°C)' },
     };
+
+    // ── Leer valores del formulario ──
+    const campos = {
+      edad:               parseInt(document.getElementById('ml-edad').value),
+      glucosa:            parseFloat(document.getElementById('ml-glucosa').value),
+      presion_sistolica:  parseInt(document.getElementById('ml-presion').value),
+      presion_diastolica: parseInt(document.getElementById('ml-presion-diastolica').value),
+      imc:                parseFloat(document.getElementById('ml-imc').value),
+      colesterol:         parseFloat(document.getElementById('ml-colesterol').value),
+      saturacion_oxigeno: parseFloat(document.getElementById('ml-saturacion').value),
+      frecuencia_cardiaca:parseInt(document.getElementById('ml-frecuencia').value),
+      temperatura:        parseFloat(document.getElementById('ml-temperatura').value),
+    };
+
+    // ── Validación 1: campos obligatorios numéricos ──
+    const vacios = Object.entries(campos)
+      .filter(([k, v]) => v === '' || isNaN(v) || document.getElementById(
+        k === 'presion_sistolica' ? 'ml-presion' :
+        k === 'presion_diastolica' ? 'ml-presion-diastolica' :
+        k === 'saturacion_oxigeno' ? 'ml-saturacion' :
+        k === 'frecuencia_cardiaca' ? 'ml-frecuencia' :
+        `ml-${k}`
+      ).value.trim() === '')
+      .map(([k]) => RANGOS[k]?.label || k);
+
+    if (vacios.length > 0) {
+      toast(`Completa los campos obligatorios: ${vacios.join(', ')}`, 'error');
+      return;
+    }
+
+    // ── Validación 2: rangos clínicos ──
+    const fueraRango = Object.entries(campos)
+      .filter(([k, v]) => RANGOS[k] && (v < RANGOS[k].min || v > RANGOS[k].max))
+      .map(([k]) => `${RANGOS[k].label} (rango: ${RANGOS[k].min}–${RANGOS[k].max})`);
+
+    if (fueraRango.length > 0) {
+      toast(`Valores fuera de rango clínico:\n${fueraRango.join('\n')}`, 'error');
+      return;
+    }
+
+    const body = {
+      ...campos,
+      sexo:                    document.getElementById('ml-sexo').value,
+      actividad_fisica:        document.getElementById('ml-actividad').value,
+      fumador:                 document.getElementById('ml-fumador').value === 'true',
+      antecedentes_familiares: document.getElementById('ml-antecedentes').value === 'true',
+      consumo_alcohol:         document.getElementById('ml-alcohol').value === 'true',
+    };
+
+    const btn = document.getElementById('btn-predict');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Calculando…';
+
     const result = await API.post('/api/predicciones/', body);
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Calcular riesgo';
+
     if (result?.riesgo_predicho) {
+      const riesgo = result.riesgo_predicho;
+      const probas = result.probabilidades || {};
       const div = document.getElementById('ml-result');
       div.classList.add('visible');
-      document.getElementById('ml-result-riesgo').textContent = `Riesgo: ${result.riesgo_predicho}`;
-      const probas = result.probabilidades || {};
-      document.getElementById('ml-result-probas').innerHTML =
-        Object.entries(probas).map(([k,v]) =>
-          `<span style="margin-right:1rem;"><strong>${k}:</strong> ${(v*100).toFixed(1)}%</span>`
+
+      // Colores y mensajes interpretativos por nivel de riesgo
+      const riesgoConfig = {
+        'Bajo':    { color: '#619438', bg: '#eef5e8', icon: 'fa-circle-check',
+                     msg: 'Los indicadores clínicos del paciente están dentro de parámetros normales.' },
+        'Medio':   { color: '#92400e', bg: '#fffbeb', icon: 'fa-circle-exclamation',
+                     msg: 'El paciente presenta factores de riesgo moderados. Se recomienda seguimiento periódico.' },
+        'Alto':    { color: '#c2410c', bg: '#fff7ed', icon: 'fa-triangle-exclamation',
+                     msg: 'El paciente presenta múltiples factores de riesgo. Se recomienda evaluación médica próxima.' },
+        'Crítico': { color: '#ef4444', bg: '#fef2f2', icon: 'fa-heart-pulse',
+                     msg: 'Riesgo crítico detectado. El paciente requiere atención médica inmediata.' },
+      };
+      const cfg = riesgoConfig[riesgo] || riesgoConfig['Medio'];
+
+      // Identificar variables de mayor peso en la decisión (top 3 por valor absoluto)
+      const factores = [];
+      if (body.presion_sistolica > 140) factores.push('Hipertensión sistólica');
+      if (body.glucosa > 126) factores.push('Glucosa elevada');
+      if (body.saturacion_oxigeno < 92) factores.push('Saturación O₂ baja');
+      if (body.imc > 30) factores.push('Obesidad (IMC elevado)');
+      if (body.fumador) factores.push('Fumador activo');
+      if (body.antecedentes_familiares) factores.push('Antecedentes familiares');
+      if (body.edad > 60) factores.push('Edad avanzada');
+
+      const probaOrdenada = Object.entries(probas)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+                      margin-bottom:.4rem;font-size:.82rem;">
+            <span style="font-weight:${k === riesgo ? '700' : '400'};
+                         color:${k === riesgo ? cfg.color : 'var(--ink-soft)'};">${k}</span>
+            <div style="display:flex;align-items:center;gap:.5rem;flex:1;margin:0 .75rem;">
+              <div style="flex:1;height:6px;background:var(--border);border-radius:3px;">
+                <div style="width:${(v*100).toFixed(1)}%;height:100%;
+                            background:${k === riesgo ? cfg.color : 'var(--border)'};
+                            border-radius:3px;transition:width .4s;"></div>
+              </div>
+            </div>
+            <span style="font-weight:600;min-width:42px;text-align:right;">${(v*100).toFixed(1)}%</span>
+          </div>`
         ).join('');
+
+      document.getElementById('ml-result').style.background = cfg.bg;
+      document.getElementById('ml-result').style.borderColor = cfg.color + '40';
+
+      document.getElementById('ml-result-riesgo').innerHTML = `
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;">
+          <i class="fa-solid ${cfg.icon}" style="color:${cfg.color};font-size:1.3rem;"></i>
+          <span style="color:${cfg.color};font-size:1.6rem;font-weight:800;">Riesgo ${riesgo}</span>
+        </div>
+        <p style="font-size:.875rem;color:var(--ink-soft);margin-bottom:1rem;">${cfg.msg}</p>
+      `;
+
+      document.getElementById('ml-result-probas').innerHTML = `
+        <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.06em;color:var(--muted);margin-bottom:.6rem;">
+          Probabilidad por nivel de riesgo
+        </p>
+        ${probaOrdenada}
+        ${factores.length ? `
+          <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border);">
+            <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;
+                      letter-spacing:.06em;color:var(--muted);margin-bottom:.5rem;">
+              Factores de riesgo detectados
+            </p>
+            <div style="display:flex;flex-wrap:wrap;gap:.35rem;">
+              ${factores.map(f => `
+                <span style="font-size:.75rem;font-weight:600;background:${cfg.bg};
+                             color:${cfg.color};border:1px solid ${cfg.color}30;
+                             border-radius:100px;padding:.2rem .65rem;">${f}</span>
+              `).join('')}
+            </div>
+          </div>` : ''}
+      `;
     } else {
       toast(result?.error || 'Error en la predicción. ¿Ya entrenaste el modelo?', 'error');
     }

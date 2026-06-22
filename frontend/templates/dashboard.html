@@ -285,12 +285,13 @@
           <thead>
             <tr>
               <th>ID</th><th>Nombre</th><th>Edad</th><th>Sexo</th>
-              <th>IMC</th><th>Glucosa</th><th>Presión Sist.</th>
+              <th>IMC</th><th>Glucosa</th><th>P. Sistólica</th>
+              <th>P. Diastólica</th><th>Sat. O₂ %</th><th>F. Cardíaca</th>
               <th>Diagnóstico</th><th>Riesgo</th>
             </tr>
           </thead>
           <tbody id="patients-tbody">
-            <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">Cargando pacientes…</td></tr>
+            <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:2rem;">Cargando pacientes…</td></tr>
           </tbody>
         </table>
         <div style="text-align:center;padding:1rem;" id="patients-pagination"></div>
@@ -402,12 +403,23 @@
             </select>
           </div>
           <div class="ml-field">
+            <label>Presión Diastólica (mmHg)</label>
+            <input type="number" id="ml-presion-diastolica" placeholder="ej: 80" />
+          </div>
+          <div class="ml-field">
             <label>Frec. Cardíaca (bpm)</label>
             <input type="number" id="ml-frecuencia" placeholder="ej: 80" />
           </div>
           <div class="ml-field">
             <label>Temperatura (°C)</label>
             <input type="number" id="ml-temperatura" placeholder="ej: 37" step="0.1" />
+          </div>
+          <div class="ml-field">
+            <label>Consumo de Alcohol</label>
+            <select id="ml-alcohol">
+              <option value="false">No</option>
+              <option value="true">Sí</option>
+            </select>
           </div>
         </div>
         <button class="cl-btn cl-btn--primary" id="btn-predict">
