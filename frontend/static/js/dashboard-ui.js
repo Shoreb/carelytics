@@ -80,7 +80,7 @@ function applyRoleVisibility(role) {
 /* ── User info in navbar ────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   const name = AuthManager.getUserName();
-  const role = AuthManager.getUserRole(); // 'administrador' | 'medico' | 'analista'
+  const role = AuthManager.getUserRole();
   const info = ROLE_INFO[role] || ROLE_INFO.medico;
 
   document.getElementById('nav-username').textContent = name;
@@ -90,15 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
   pill.textContent = info.label;
   pill.classList.add(`role-pill--${role}`);
 
-  // Context banner in overview
   const banner = document.getElementById('role-banner');
   banner.classList.add(`role-banner--${role}`);
   document.getElementById('role-banner-text').innerHTML = info.banner;
 
-  // Hide sections / buttons not available for this role
   applyRoleVisibility(role);
 
-  // If the active section got hidden (edge case), fall back to overview
   const activeLink = document.querySelector('.sidebar-link.active');
   if (activeLink && activeLink.style.display === 'none') {
     const overviewLink = document.querySelector('[onclick*="overview"]');
@@ -106,12 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('section-overview').classList.add('active');
   }
 
-  // Date header
   const now = new Date();
   document.getElementById('header-date').textContent =
     `${now.toLocaleDateString('es-CO', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`;
 
-  // Load extra charts after dashboard.js runs
   loadExtraKPIs();
   setupETLButtons();
   setupMLButtons();
@@ -124,7 +119,6 @@ async function loadExtraKPIs() {
   const data = await API.get('/api/dashboard/kpis/');
   if (!data) return;
 
-  // Sexo chart
   const sexo = data.por_sexo || {};
   new Chart(document.getElementById('chart-sexo'), {
     type: 'doughnut',
@@ -137,7 +131,6 @@ async function loadExtraKPIs() {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
   });
 
-  // Edad chart
   const edad = data.grupos_edad || {};
   new Chart(document.getElementById('chart-edad'), {
     type: 'bar',
@@ -200,7 +193,7 @@ function updateETLStats(result) {
   document.getElementById('etl-stat-duplicados').textContent = result.registros_duplicados ?? '—';
 }
 
-/* ── Reporte de mapeo de columnas (útil para datasets externos) ───── */
+/* ── Reporte de mapeo de columnas ───────────────────────────────── */
 function renderColumnReport(reconocidas, ignoradas) {
   let card = document.getElementById('column-report-card');
   if (!card) {
@@ -300,7 +293,7 @@ async function loadPatients() {
 
   const results = data?.results || data || [];
   if (!results.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">Sin pacientes. Ejecuta el ETL primero.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:2rem;">Sin pacientes. Ejecuta el ETL primero.</td></tr>';
     return;
   }
 
@@ -319,8 +312,204 @@ async function loadPatients() {
       <td>${p.frecuencia_cardiaca ?? '—'}</td>
       <td>${p.diagnostico_preliminar}</td>
       <td><span class="riesgo-badge ${riesgoCls[p.riesgo_enfermedad] || ''}">${p.riesgo_enfermedad}</span></td>
+      <td class="patient-actions-cell">
+        <button class="btn-action btn-action--view" title="Ver expediente" onclick="verPaciente(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+          <i class="fa-solid fa-eye"></i>
+        </button>
+        <button class="btn-action btn-action--predict" title="Predicción ML" onclick="predecirPaciente(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+          <i class="fa-solid fa-brain"></i>
+        </button>
+      </td>
     </tr>
   `).join('');
+}
+
+/* ── Modal: Ver Paciente ────────────────────────────────────────── */
+function verPaciente(p) {
+  const modal = new bootstrap.Modal(document.getElementById('modalVerPaciente'));
+  document.getElementById('modalVerPacienteLabel').textContent = `Expediente — ${p.nombre}`;
+
+  const riesgoCls = { 'Bajo':'riesgo-bajo','Medio':'riesgo-medio','Alto':'riesgo-alto','Crítico':'riesgo-critico' };
+  const sexoLabel = p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Femenino' : 'Otro';
+
+  const fila = (icon, label, value) => value != null && value !== '' && value !== '—' ? `
+    <div class="paciente-detail-row">
+      <span class="paciente-detail-icon"><i class="fa-solid ${icon}"></i></span>
+      <span class="paciente-detail-label">${label}</span>
+      <span class="paciente-detail-value">${value}</span>
+    </div>` : '';
+
+  document.getElementById('modal-ver-paciente-body').innerHTML = `
+    <div class="paciente-detail-header">
+      <div class="paciente-detail-avatar">
+        <i class="fa-solid ${p.sexo === 'F' ? 'fa-user-nurse' : 'fa-user-injured'}"></i>
+      </div>
+      <div>
+        <div class="paciente-detail-name">${p.nombre}</div>
+        <div class="paciente-detail-id">ID: ${p.identificacion}</div>
+        <span class="riesgo-badge ${riesgoCls[p.riesgo_enfermedad] || ''}" style="margin-top:.4rem;display:inline-block;">${p.riesgo_enfermedad}</span>
+      </div>
+    </div>
+
+    <div class="paciente-detail-section-title"><i class="fa-solid fa-id-card"></i> Datos Personales</div>
+    <div class="paciente-detail-grid">
+      ${fila('fa-cake-candles', 'Edad', p.edad + ' años')}
+      ${fila('fa-venus-mars', 'Sexo', sexoLabel)}
+      ${fila('fa-calendar-day', 'Fecha Consulta', p.fecha_consulta || '—')}
+    </div>
+
+    <div class="paciente-detail-section-title"><i class="fa-solid fa-heart-pulse"></i> Signos Vitales</div>
+    <div class="paciente-detail-grid">
+      ${fila('fa-droplet', 'Glucosa', p.glucosa != null ? Number(p.glucosa).toFixed(1) + ' mg/dL' : null)}
+      ${fila('fa-gauge-high', 'P. Sistólica', p.presion_sistolica != null ? p.presion_sistolica + ' mmHg' : null)}
+      ${fila('fa-gauge', 'P. Diastólica', p.presion_diastolica != null ? p.presion_diastolica + ' mmHg' : null)}
+      ${fila('fa-lungs', 'Saturación O₂', p.saturacion_oxigeno != null ? Number(p.saturacion_oxigeno).toFixed(1) + '%' : null)}
+      ${fila('fa-heart', 'Frec. Cardíaca', p.frecuencia_cardiaca != null ? p.frecuencia_cardiaca + ' bpm' : null)}
+      ${fila('fa-temperature-half', 'Temperatura', p.temperatura != null ? Number(p.temperatura).toFixed(1) + ' °C' : null)}
+    </div>
+
+    <div class="paciente-detail-section-title"><i class="fa-solid fa-weight-scale"></i> Antropometría</div>
+    <div class="paciente-detail-grid">
+      ${fila('fa-weight-scale', 'Peso', p.peso != null ? Number(p.peso).toFixed(1) + ' kg' : null)}
+      ${fila('fa-ruler-vertical', 'Altura', p.altura != null ? Number(p.altura).toFixed(2) + ' m' : null)}
+      ${fila('fa-chart-simple', 'IMC', p.imc != null ? Number(p.imc).toFixed(1) : null)}
+      ${fila('fa-flask', 'Colesterol', p.colesterol != null ? Number(p.colesterol).toFixed(1) + ' mg/dL' : null)}
+    </div>
+
+    <div class="paciente-detail-section-title"><i class="fa-solid fa-person-walking"></i> Hábitos</div>
+    <div class="paciente-detail-grid">
+      ${fila('fa-person-running', 'Actividad Física', p.actividad_fisica)}
+      ${fila('fa-smoking', 'Fumador', p.fumador ? 'Sí' : 'No')}
+      ${fila('fa-wine-glass', 'Consumo Alcohol', p.consumo_alcohol ? 'Sí' : 'No')}
+      ${fila('fa-dna', 'Antec. Familiares', p.antecedentes_familiares ? 'Sí' : 'No')}
+    </div>
+
+    <div class="paciente-detail-section-title"><i class="fa-solid fa-stethoscope"></i> Diagnóstico Clínico</div>
+    <div class="paciente-detail-grid">
+      ${fila('fa-file-medical', 'Diagnóstico', p.diagnostico_preliminar)}
+      ${fila('fa-triangle-exclamation', 'Nivel de Riesgo', p.riesgo_enfermedad)}
+    </div>
+  `;
+
+  modal.show();
+}
+
+/* ── Modal: Predicción Individual ──────────────────────────────── */
+async function predecirPaciente(p) {
+  const modal = new bootstrap.Modal(document.getElementById('modalPrediccion'));
+  document.getElementById('modalPrediccionLabel').textContent = `Predicción ML — ${p.nombre}`;
+  document.getElementById('modal-prediccion-body').innerHTML = `
+    <div class="cl-modal__loading">
+      <span class="spinner-border spinner-border-sm"></span> Calculando predicción para <strong>${p.nombre}</strong>…
+    </div>`;
+  modal.show();
+
+  const body = {
+    edad:               p.edad,
+    glucosa:            p.glucosa != null ? parseFloat(p.glucosa) : null,
+    presion_sistolica:  p.presion_sistolica,
+    presion_diastolica: p.presion_diastolica,
+    imc:                p.imc != null ? parseFloat(p.imc) : null,
+    colesterol:         p.colesterol != null ? parseFloat(p.colesterol) : null,
+    saturacion_oxigeno: p.saturacion_oxigeno != null ? parseFloat(p.saturacion_oxigeno) : null,
+    frecuencia_cardiaca: p.frecuencia_cardiaca,
+    temperatura:        p.temperatura != null ? parseFloat(p.temperatura) : null,
+    sexo:               p.sexo,
+    actividad_fisica:   p.actividad_fisica,
+    fumador:            p.fumador,
+    antecedentes_familiares: p.antecedentes_familiares,
+    consumo_alcohol:    p.consumo_alcohol,
+  };
+
+  const result = await API.post('/api/predicciones/', body);
+
+  if (!result?.riesgo_predicho) {
+    document.getElementById('modal-prediccion-body').innerHTML = `
+      <div class="cl-modal__error">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <p>${result?.error || 'No se pudo calcular la predicción. Verifica que el modelo esté entrenado.'}</p>
+      </div>`;
+    return;
+  }
+
+  const riesgo = result.riesgo_predicho;
+  const probas = result.probabilidades || {};
+
+  const riesgoConfig = {
+    'Bajo':    { color: '#619438', bg: '#eef5e8', icon: 'fa-circle-check',
+                 msg: 'Los indicadores clínicos del paciente están dentro de parámetros normales.' },
+    'Medio':   { color: '#92400e', bg: '#fffbeb', icon: 'fa-circle-exclamation',
+                 msg: 'El paciente presenta factores de riesgo moderados. Se recomienda seguimiento periódico.' },
+    'Alto':    { color: '#c2410c', bg: '#fff7ed', icon: 'fa-triangle-exclamation',
+                 msg: 'El paciente presenta múltiples factores de riesgo. Se recomienda evaluación médica próxima.' },
+    'Crítico': { color: '#ef4444', bg: '#fef2f2', icon: 'fa-heart-pulse',
+                 msg: 'Riesgo crítico detectado. El paciente requiere atención médica inmediata.' },
+  };
+  const cfg = riesgoConfig[riesgo] || riesgoConfig['Medio'];
+
+  const factores = [];
+  if (body.presion_sistolica > 140) factores.push('Hipertensión sistólica');
+  if (body.glucosa > 126) factores.push('Glucosa elevada');
+  if (body.saturacion_oxigeno < 92) factores.push('Saturación O₂ baja');
+  if (body.imc > 30) factores.push('Obesidad (IMC elevado)');
+  if (body.fumador) factores.push('Fumador activo');
+  if (body.antecedentes_familiares) factores.push('Antecedentes familiares');
+  if (body.edad > 60) factores.push('Edad avanzada');
+
+  const probaOrdenada = Object.entries(probas)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;font-size:.82rem;">
+        <span style="font-weight:${k === riesgo ? '700' : '400'};color:${k === riesgo ? cfg.color : 'var(--ink-soft)'};">${k}</span>
+        <div style="display:flex;align-items:center;gap:.5rem;flex:1;margin:0 .75rem;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;">
+            <div style="width:${(v*100).toFixed(1)}%;height:100%;background:${k === riesgo ? cfg.color : 'var(--border)'};border-radius:3px;transition:width .4s;"></div>
+          </div>
+        </div>
+        <span style="font-weight:600;min-width:42px;text-align:right;">${(v*100).toFixed(1)}%</span>
+      </div>`
+    ).join('');
+
+  const riesgoCls = { 'Bajo':'riesgo-bajo','Medio':'riesgo-medio','Alto':'riesgo-alto','Crítico':'riesgo-critico' };
+
+  document.getElementById('modal-prediccion-body').innerHTML = `
+    <div class="prediccion-paciente-info">
+      <i class="fa-solid fa-user-injured" style="color:var(--purple);font-size:1.1rem;"></i>
+      <div>
+        <strong>${p.nombre}</strong>
+        <span style="color:var(--muted);font-size:.82rem;margin-left:.5rem;">ID: ${p.identificacion} · ${p.edad} años · ${p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Femenino' : 'Otro'}</span>
+      </div>
+      <span class="riesgo-badge ${riesgoCls[p.riesgo_enfermedad] || ''}" style="margin-left:auto;">
+        Registro: ${p.riesgo_enfermedad}
+      </span>
+    </div>
+
+    <div class="ml-result visible" style="background:${cfg.bg};border-color:${cfg.color}40;margin-top:1rem;">
+      <p style="font-size:.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.5rem;">Resultado de la predicción</p>
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;">
+        <i class="fa-solid ${cfg.icon}" style="color:${cfg.color};font-size:1.3rem;"></i>
+        <span style="color:${cfg.color};font-size:1.6rem;font-weight:800;">Riesgo ${riesgo}</span>
+      </div>
+      <p style="font-size:.875rem;color:var(--ink-soft);margin-bottom:1rem;">${cfg.msg}</p>
+
+      <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.6rem;">
+        Probabilidad por nivel de riesgo
+      </p>
+      ${probaOrdenada}
+
+      ${factores.length ? `
+        <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border);">
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.5rem;">
+            Factores de riesgo detectados
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:.35rem;">
+            ${factores.map(f => `
+              <span style="font-size:.75rem;font-weight:600;background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.color}30;border-radius:100px;padding:.2rem .65rem;">${f}</span>
+            `).join('')}
+          </div>
+        </div>` : ''}
+    </div>
+  `;
 }
 
 /* ── Confusion matrix renderer ─────────────────────────────────── */
@@ -334,12 +523,9 @@ function renderConfusionMatrix(matrix, labels) {
   const maxVal = Math.max(...matrix.flat());
   const n = labels.length;
 
-  // Escala de un solo color (morado), como un heatmap de matplotlib.
-  // La intensidad depende únicamente del valor de la celda, no de si
-  // está en la diagonal — igual que "Confusion matrix, without normalization".
   function cellStyle(value) {
     if (maxVal === 0) return 'background:#f3eeff;color:var(--ink);';
-    const t = value / maxVal; // 0..1
+    const t = value / maxVal;
     const r = Math.round(243 + (103 - 243) * t);
     const g = Math.round(238 + (40  - 238) * t);
     const b = Math.round(255 + (177 - 255) * t);
@@ -349,7 +535,6 @@ function renderConfusionMatrix(matrix, labels) {
 
   let html = `<div class="cm-title">Matriz de confusión (sin normalizar)</div>`;
   html += `<div class="cm-container"><div>`;
-
   html += `<div class="cm-grid-wrap">`;
   html += `<div class="cm-ylabel">Valor real</div>`;
   html += `<div class="cm-rows">`;
@@ -364,12 +549,10 @@ function renderConfusionMatrix(matrix, labels) {
   });
 
   html += `</div></div>`;
-
   html += `<div class="cm-cols-footer">`;
   labels.forEach(l => html += `<div class="cm-col-label">${l}</div>`);
   html += `</div>`;
   html += `<div class="cm-xlabel">Predicción del modelo</div>`;
-
   html += `</div>`;
 
   const tickCount = 5;
@@ -387,11 +570,10 @@ function renderConfusionMatrix(matrix, labels) {
   `;
 
   html += `</div>`;
-
   wrap.innerHTML = html;
 }
 
-/* ── Load existing ML metrics on section entry (if model already trained) ── */
+/* ── Load existing ML metrics on section entry ──────────────────── */
 async function loadMLMetrics() {
   const result = await API.get('/api/ml/metricas/');
   if (result?.accuracy !== undefined) {
@@ -426,8 +608,6 @@ function setupMLButtons() {
   });
 
   document.getElementById('btn-predict').addEventListener('click', async () => {
-
-    // ── Rangos clínicos aceptables (mismos que exploracion.py) ──
     const RANGOS = {
       edad:               { min: 0,    max: 120,  label: 'Edad (años)' },
       glucosa:            { min: 20,   max: 700,  label: 'Glucosa (mg/dL)' },
@@ -440,7 +620,6 @@ function setupMLButtons() {
       temperatura:        { min: 35,   max: 42,   label: 'Temperatura (°C)' },
     };
 
-    // ── Leer valores del formulario ──
     const campos = {
       edad:               parseInt(document.getElementById('ml-edad').value),
       glucosa:            parseFloat(document.getElementById('ml-glucosa').value),
@@ -453,7 +632,6 @@ function setupMLButtons() {
       temperatura:        parseFloat(document.getElementById('ml-temperatura').value),
     };
 
-    // ── Validación 1: campos obligatorios numéricos ──
     const vacios = Object.entries(campos)
       .filter(([k, v]) => v === '' || isNaN(v) || document.getElementById(
         k === 'presion_sistolica' ? 'ml-presion' :
@@ -469,7 +647,6 @@ function setupMLButtons() {
       return;
     }
 
-    // ── Validación 2: rangos clínicos ──
     const fueraRango = Object.entries(campos)
       .filter(([k, v]) => RANGOS[k] && (v < RANGOS[k].min || v > RANGOS[k].max))
       .map(([k]) => `${RANGOS[k].label} (rango: ${RANGOS[k].min}–${RANGOS[k].max})`);
@@ -503,7 +680,6 @@ function setupMLButtons() {
       const div = document.getElementById('ml-result');
       div.classList.add('visible');
 
-      // Colores y mensajes interpretativos por nivel de riesgo
       const riesgoConfig = {
         'Bajo':    { color: '#619438', bg: '#eef5e8', icon: 'fa-circle-check',
                      msg: 'Los indicadores clínicos del paciente están dentro de parámetros normales.' },
@@ -516,7 +692,6 @@ function setupMLButtons() {
       };
       const cfg = riesgoConfig[riesgo] || riesgoConfig['Medio'];
 
-      // Identificar variables de mayor peso en la decisión (top 3 por valor absoluto)
       const factores = [];
       if (body.presion_sistolica > 140) factores.push('Hipertensión sistólica');
       if (body.glucosa > 126) factores.push('Glucosa elevada');
