@@ -274,38 +274,94 @@ class ETLRunView(APIView):
         # no el umbral mínimo, para representar fielmente la categoría.
         # -----------------------------------------------------------------------------
         MAPEO_PRESION_SISTOLICA = {
-            'muy baja': 75,  'muy bajo': 75,
-            'baja':     90,  'bajo':     90,
-            'normal':  115,
-            'alta':    150,  'alto':    150,  # Hipertensión stage 1 (140-159) → centro
-            'muy alta': 170, 'muy alto': 170, # Hipertensión stage 2 (≥160)
-            'elevada':  150, 'elevado':  150,
+            # Muy baja / hipotensión severa (< 80 mmHg)
+            'muy baja': 75,   'muy bajo': 75,
+            'hipotension severa': 75, 'hipotensión severa': 75,
+            'critica': 75,    'crítica': 75,   'critico': 75,   'crítico': 75,
+            # Baja / hipotensión (80–99 mmHg)
+            'baja':  90,  'bajo':  90,
+            'hipotension': 90, 'hipotensión': 90,
+            'baja presion': 90, 'baja presión': 90,
+            # Normal / óptima (100–129 mmHg)
+            'normal':   115,  'optima': 115,   'óptima': 115,
+            'saludable': 115, 'regular': 115,
+            # Elevada / prehipertensión (130–139 mmHg)
+            'elevada':  135,  'elevado':  135,
+            'prehipertension': 135, 'prehipertensión': 135,
+            'limite':   135,  'límite':   135,  'limítrofe': 135,
+            # Alta / hipertensión stage 1 (140–159 mmHg)
+            'alta':    150,  'alto':    150,
+            'hipertension': 150, 'hipertensión': 150,
+            'alta presion': 150, 'alta presión': 150,
+            'presion alta': 150, 'presión alta': 150,
+            'tension alta': 150, 'tensión alta': 150,
+            # Muy alta / hipertensión stage 2 (≥ 160 mmHg)
+            'muy alta': 170, 'muy alto': 170,
+            'hipertension severa': 170, 'hipertensión severa': 170,
+            'hipertension grave': 170,  'hipertensión grave': 170,
+            'crisis hipertensiva': 180, 'emergencia hipertensiva': 180,
         }
         MAPEO_PRESION_DIASTOLICA = {
+            # Muy baja (< 60 mmHg)
             'muy baja': 50,  'muy bajo': 50,
-            'baja':     65,  'bajo':     65,
-            'normal':   80,
-            'alta':     95,  'alto':     95,  # Stage 1 (90-99) → centro
-            'muy alta': 105, 'muy alto': 105, # Stage 2 (≥100)
-            'elevada':  95,  'elevado':  95,
+            'hipotension severa': 50, 'hipotensión severa': 50,
+            'critica': 50,   'crítica': 50,   'critico': 50,   'crítico': 50,
+            # Baja / hipotensión (60–69 mmHg)
+            'baja':  65,  'bajo':  65,
+            'hipotension': 65, 'hipotensión': 65,
+            'baja presion': 65, 'baja presión': 65,
+            # Normal (70–79 mmHg)
+            'normal':    80,  'optima': 80,   'óptima': 80,
+            'saludable': 80,  'regular': 80,
+            # Elevada / prehipertensión (80–89 mmHg)
+            'elevada':  85,  'elevado':  85,
+            'prehipertension': 85, 'prehipertensión': 85,
+            'limite':   85,  'límite':   85,  'limítrofe': 85,
+            # Alta / hipertensión stage 1 (90–99 mmHg)
+            'alta':     95,  'alto':     95,
+            'hipertension': 95, 'hipertensión': 95,
+            'alta presion': 95, 'alta presión': 95,
+            'presion alta': 95, 'presión alta': 95,
+            'tension alta': 95, 'tensión alta': 95,
+            # Muy alta / hipertensión stage 2 (≥ 100 mmHg)
+            'muy alta': 105, 'muy alto': 105,
+            'hipertension severa': 110, 'hipertensión severa': 110,
+            'hipertension grave': 110,  'hipertensión grave': 110,
+            'crisis hipertensiva': 115, 'emergencia hipertensiva': 115,
         }
+
+        def _normalizar_clave(texto):
+            """Minúsculas + strip + elimina tildes/diacríticos para búsqueda robusta."""
+            import unicodedata
+            s = str(texto).strip().lower()
+            s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('utf-8')
+            return s
 
         def _mapear_texto_a_numero(col, mapeo):
             if col not in df.columns:
                 return
+            # Construir versión del mapeo con claves también sin tildes para doble lookup
+            mapeo_norm = {_normalizar_clave(k): v for k, v in mapeo.items()}
             # Solo actuar sobre celdas que sean texto (no numéricas ya)
             es_texto = df[col].apply(lambda v: isinstance(v, str) or
                                     (hasattr(v, '__class__') and v.__class__.__name__ == 'str'))
             antes = df[col].copy()
-            df[col] = df[col].apply(
-                lambda v: mapeo.get(str(v).strip().lower(), v)
-                if isinstance(v, str) else v
-            )
+
+            def _buscar(v):
+                if not isinstance(v, str):
+                    return v
+                clave_orig = str(v).strip().lower()
+                clave_norm = _normalizar_clave(v)
+                # Primero intenta match exacto (con tildes tal como está en el mapeo),
+                # luego intenta match sin tildes para máxima cobertura.
+                return mapeo.get(clave_orig, mapeo_norm.get(clave_norm, v))
+
+            df[col] = df[col].apply(_buscar)
             # Registrar cada conversión de texto → número en el informe
             for idx in df[es_texto].index:
                 orig = str(antes.at[idx]).strip()
                 nuevo = df.at[idx, col]
-                if orig.lower() in mapeo:
+                if orig != nuevo:  # solo registrar si efectivamente cambió
                     informe.registrar(
                         df.at[idx, 'identificacion'], col,
                         orig, nuevo, 'texto_a_numero_cualitativo'
@@ -442,9 +498,22 @@ class ETLRunView(APIView):
             df[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else None)
 
         # Signos vitales: texto cualitativo ya fue convertido en paso 3b.
-        # Los NaN que lleguen aquí son valores genuinamente ausentes → imputa con default clínico.
-        _imputar_serie('presion_sistolica',  120, 'imputacion_default', lambda x: int(float(x)))
-        _imputar_serie('presion_diastolica',  80, 'imputacion_default', lambda x: int(float(x)))
+        # Usar la mediana del dataset para imputar presión arterial en lugar de
+        # un valor hardcodeado (120/80), para que la imputación refleje la
+        # distribución real de la cohorte cargada y no empuje artificialmente
+        # hacia valores "normales" a pacientes que pueden ser hipertensos.
+        mediana_ps = (
+            int(df['presion_sistolica'].median())
+            if 'presion_sistolica' in df.columns and df['presion_sistolica'].notna().any()
+            else 120
+        )
+        mediana_pd = (
+            int(df['presion_diastolica'].median())
+            if 'presion_diastolica' in df.columns and df['presion_diastolica'].notna().any()
+            else 80
+        )
+        _imputar_serie('presion_sistolica',  mediana_ps, 'imputacion_mediana', lambda x: int(float(x)))
+        _imputar_serie('presion_diastolica', mediana_pd, 'imputacion_mediana', lambda x: int(float(x)))
         _imputar_serie('frecuencia_cardiaca', 70, 'imputacion_default', lambda x: int(float(x)))
         _imputar_serie('glucosa',           90.0, 'imputacion_default')
         _imputar_serie('saturacion_oxigeno',97.0, 'imputacion_default')
