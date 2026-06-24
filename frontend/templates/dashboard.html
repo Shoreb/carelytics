@@ -287,7 +287,7 @@
               <th>ID</th><th>Nombre</th><th>Edad</th><th>Sexo</th>
               <th>IMC</th><th>Glucosa</th><th>P. Sistólica</th>
               <th>P. Diastólica</th><th>Sat. O₂ %</th><th>F. Cardíaca</th>
-              <th>Diagnóstico</th><th>Riesgo</th>
+              <th>Diagnóstico</th><th>Riesgo</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody id="patients-tbody">
@@ -455,6 +455,51 @@
 <!-- ── Toast container ─────────────────────────────────────────── -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
+<!-- ── Modal: Ver Paciente ─────────────────────────────────────── -->
+<div class="modal fade" id="modalVerPaciente" tabindex="-1" aria-labelledby="modalVerPacienteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content cl-modal">
+      <div class="modal-header cl-modal__header">
+        <div class="cl-modal__title-wrap">
+          <i class="fa-solid fa-notes-medical" style="color:var(--purple);"></i>
+          <h5 class="modal-title" id="modalVerPacienteLabel">Expediente del Paciente</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="modal-ver-paciente-body">
+        <div class="cl-modal__loading">
+          <span class="spinner-border spinner-border-sm"></span> Cargando datos…
+        </div>
+      </div>
+      <div class="modal-footer cl-modal__footer">
+        <button type="button" class="cl-btn cl-btn--outline" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Predicción Individual ───────────────────────────── -->
+<div class="modal fade" id="modalPrediccion" tabindex="-1" aria-labelledby="modalPrediccionLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content cl-modal">
+      <div class="modal-header cl-modal__header">
+        <div class="cl-modal__title-wrap">
+          <i class="fa-solid fa-brain" style="color:var(--purple);"></i>
+          <h5 class="modal-title" id="modalPrediccionLabel">Predicción ML — Paciente Individual</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="modal-prediccion-body">
+        <div class="cl-modal__loading">
+          <span class="spinner-border spinner-border-sm"></span> Calculando predicción…
+        </div>
+      </div>
+      <div class="modal-footer cl-modal__footer">
+        <button type="button" class="cl-btn cl-btn--outline" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{% static 'js/auth.js' %}"></script>
