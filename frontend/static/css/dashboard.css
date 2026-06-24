@@ -559,6 +559,198 @@
       to   { transform: translateX(0); opacity: 1; }
     }
 
+    /* ══ Botones de acción en tabla de pacientes ══════════════════════ */
+.patient-actions-cell {
+  white-space: nowrap;
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  font-size: .8rem;
+  transition: background .15s, border-color .15s, color .15s, transform .1s;
+  background: transparent;
+}
+
+.btn-action:active { transform: scale(.93); }
+
+.btn-action--view {
+  color: var(--purple);
+  border-color: var(--purple);
+}
+.btn-action--view:hover {
+  background: var(--purple-pale);
+  border-color: var(--purple-light);
+}
+
+.btn-action--predict {
+  color: var(--green);
+  border-color: var(--green);
+}
+.btn-action--predict:hover {
+  background: #eef5e8;
+  border-color: var(--green-light);
+}
+
+/* ══ Modales Carelytics ═══════════════════════════════════════════ */
+.cl-modal {
+  border-radius: 16px;
+  border: 1.5px solid var(--border);
+  box-shadow: 0 20px 60px rgba(0,0,0,.12);
+  overflow: hidden;
+}
+
+.cl-modal__header {
+  background: var(--surface);
+  border-bottom: 1.5px solid var(--border);
+  padding: 1rem 1.25rem;
+}
+
+.cl-modal__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cl-modal__footer {
+  background: var(--surface);
+  border-top: 1.5px solid var(--border);
+  padding: .75rem 1.25rem;
+}
+
+.cl-modal__loading {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 2.5rem;
+  color: var(--muted);
+  font-size: .9rem;
+  justify-content: center;
+}
+
+.cl-modal__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .75rem;
+  padding: 2.5rem;
+  color: var(--red);
+  text-align: center;
+  font-size: .9rem;
+}
+
+.cl-modal__error i { font-size: 2rem; }
+
+/* ══ Detalle de paciente (modal ver) ══════════════════════════════ */
+.paciente-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0 1.25rem;
+  border-bottom: 1.5px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+.paciente-detail-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--purple-pale);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: var(--purple);
+  flex-shrink: 0;
+}
+
+.paciente-detail-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.paciente-detail-id {
+  font-size: .8rem;
+  color: var(--muted);
+  font-family: monospace;
+  margin-top: .15rem;
+}
+
+.paciente-detail-section-title {
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--purple);
+  margin: 1.25rem 0 .6rem;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.paciente-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .4rem .75rem;
+}
+
+.paciente-detail-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .45rem .6rem;
+  background: var(--surface);
+  border-radius: 8px;
+  font-size: .83rem;
+}
+
+.paciente-detail-icon {
+  color: var(--purple);
+  font-size: .75rem;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.paciente-detail-label {
+  color: var(--muted);
+  flex: 1;
+  min-width: 0;
+}
+
+.paciente-detail-value {
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ══ Info del paciente en modal predicción ════════════════════════ */
+.prediccion-paciente-info {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: .88rem;
+}
+
     /* ── Responsive ──────────────────────────────────────────────── */
     @media (max-width: 1100px) {
       .kpi-grid        { grid-template-columns: repeat(2, 1fr); }
