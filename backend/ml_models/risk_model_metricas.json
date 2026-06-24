@@ -1,8 +1,8 @@
 {
-  "accuracy": 0.9667,
-  "precision": 0.9653,
-  "recall": 0.9667,
-  "f1_score": 0.9649,
+  "accuracy": 0.9694,
+  "precision": 0.9683,
+  "recall": 0.9694,
+  "f1_score": 0.9683,
   "matriz_confusion": [
     [
       309,
@@ -11,8 +11,8 @@
     ],
     [
       1,
-      6,
-      4
+      7,
+      3
     ],
     [
       5,

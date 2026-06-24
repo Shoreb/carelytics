@@ -62,7 +62,7 @@ class ETLRunView(APIView):
             log.registros_leidos = len(df)
 
             # ── 2. TRANSFORM ──────────────────────────────────────────────────
-            df_limpio, duplicados, invalidos, reporte_columnas = self._transformar(df)
+            df_limpio, duplicados, invalidos, reporte_columnas, informe_limpieza = self._transformar(df)
             log.registros_duplicados = duplicados
             log.registros_invalidos = invalidos
 
@@ -86,6 +86,7 @@ class ETLRunView(APIView):
                 'log_id': log.id,
                 'columnas_reconocidas': reporte_columnas['reconocidas'],
                 'columnas_ignoradas': reporte_columnas['ignoradas'],
+                'informe_limpieza': informe_limpieza,
             }, status=status.HTTP_201_CREATED)
 
         except FileNotFoundError as e:
@@ -157,11 +158,17 @@ class ETLRunView(APIView):
         normalizan mayúsculas/tildes/espacios antes de comparar. Esto
         permite procesar datasets externos sin que el usuario tenga que
         renombrar columnas manualmente.
+
+        Cada modificación queda registrada en InformeLimpieza para
+        trazabilidad médica completa.
         """
         import pandas as pd  # lazy import
         import numpy as np   # lazy import
         import unicodedata
         from etl import exploracion as ex
+        from etl.informe import InformeLimpieza
+
+        informe = InformeLimpieza()
 
         def normalizar_nombre_columna(col):
             """minúsculas, sin tildes, espacios/guiones → guión bajo."""
@@ -260,6 +267,54 @@ class ETLRunView(APIView):
         df.loc[df['nombre'] == '', 'nombre'] = 'Paciente ' + df['identificacion'].astype(str)
 
         # -----------------------------------------------------------------------------
+        # 3b. MAPEO DE TEXTO A NÚMERO para campos con vocabulario cualitativo
+        # Debe ocurrir ANTES del paso 4 (pd.to_numeric) porque ese paso
+        # convierte cualquier texto a NaN de forma irreversible.
+        # Estos mapeos usan el valor CENTRAL del rango clínico correspondiente,
+        # no el umbral mínimo, para representar fielmente la categoría.
+        # -----------------------------------------------------------------------------
+        MAPEO_PRESION_SISTOLICA = {
+            'muy baja': 75,  'muy bajo': 75,
+            'baja':     90,  'bajo':     90,
+            'normal':  115,
+            'alta':    150,  'alto':    150,  # Hipertensión stage 1 (140-159) → centro
+            'muy alta': 170, 'muy alto': 170, # Hipertensión stage 2 (≥160)
+            'elevada':  150, 'elevado':  150,
+        }
+        MAPEO_PRESION_DIASTOLICA = {
+            'muy baja': 50,  'muy bajo': 50,
+            'baja':     65,  'bajo':     65,
+            'normal':   80,
+            'alta':     95,  'alto':     95,  # Stage 1 (90-99) → centro
+            'muy alta': 105, 'muy alto': 105, # Stage 2 (≥100)
+            'elevada':  95,  'elevado':  95,
+        }
+
+        def _mapear_texto_a_numero(col, mapeo):
+            if col not in df.columns:
+                return
+            # Solo actuar sobre celdas que sean texto (no numéricas ya)
+            es_texto = df[col].apply(lambda v: isinstance(v, str) or
+                                    (hasattr(v, '__class__') and v.__class__.__name__ == 'str'))
+            antes = df[col].copy()
+            df[col] = df[col].apply(
+                lambda v: mapeo.get(str(v).strip().lower(), v)
+                if isinstance(v, str) else v
+            )
+            # Registrar cada conversión de texto → número en el informe
+            for idx in df[es_texto].index:
+                orig = str(antes.at[idx]).strip()
+                nuevo = df.at[idx, col]
+                if orig.lower() in mapeo:
+                    informe.registrar(
+                        df.at[idx, 'identificacion'], col,
+                        orig, nuevo, 'texto_a_numero_cualitativo'
+                    )
+
+        _mapear_texto_a_numero('presion_sistolica',  MAPEO_PRESION_SISTOLICA)
+        _mapear_texto_a_numero('presion_diastolica', MAPEO_PRESION_DIASTOLICA)
+
+        # -----------------------------------------------------------------------------
         # 4. LIMPIEZA EXTREMA: Conversión forzada de texto a nulo (La "trampa")
         # -----------------------------------------------------------------------------
         cols_numericas = ['edad', 'peso', 'altura', 'glucosa', 'colesterol', 
@@ -268,67 +323,148 @@ class ETLRunView(APIView):
         
         for col in cols_numericas:
             if col in df.columns:
-                # Transforma letras como "Treinta" o "Alta" en np.nan para que puedan ser imputados
+                antes = df[col].copy()
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Registrar cada celda donde texto → NaN
+                mascara = antes.notna() & df[col].isna()
+                for idx in df[mascara].index:
+                    informe.registrar(
+                        df.at[idx, 'identificacion'], col,
+                        antes.at[idx], None, 'texto_a_nulo'
+                    )
 
         # -----------------------------------------------------------------------------
         # 5. VALORES ATÍPICOS ABSURDOS a Nulo
         # -----------------------------------------------------------------------------
-        if 'peso' in df.columns: df.loc[(df['peso'] < 20) | (df['peso'] > 300), 'peso'] = np.nan
-        if 'temperatura' in df.columns: df.loc[(df['temperatura'] < 34) | (df['temperatura'] > 43), 'temperatura'] = np.nan
-        if 'altura' in df.columns: df.loc[(df['altura'] < 0.5) | (df['altura'] > 2.5), 'altura'] = np.nan
+        def _atipico_a_nulo(col, minval, maxval):
+            if col not in df.columns:
+                return
+            antes = df[col].copy()
+            df.loc[(df[col] < minval) | (df[col] > maxval), col] = np.nan
+            mascara = antes.notna() & df[col].isna()
+            for idx in df[mascara].index:
+                informe.registrar(
+                    df.at[idx, 'identificacion'], col,
+                    antes.at[idx], None, 'atipico_a_nulo'
+                )
+
+        _atipico_a_nulo('peso',        20,  300)
+        _atipico_a_nulo('temperatura', 34,   43)
+        _atipico_a_nulo('altura',      0.5,  2.5)
 
         # -----------------------------------------------------------------------------
         # 6. NORMALIZACIÓN ORTOGRÁFICA
         # -----------------------------------------------------------------------------
         if 'diagnostico_preliminar' in df.columns:
+            antes_diag = df['diagnostico_preliminar'].copy()
             df['diagnostico_preliminar'] = df['diagnostico_preliminar'].astype(str).str.lower().str.strip()
             df['diagnostico_preliminar'] = df['diagnostico_preliminar'].replace({
                 'hipertencion': 'Hipertensión', 'hipertension': 'Hipertensión', 'hipertensión': 'Hipertensión',
                 'diabetes': 'Diabetes', 'sano': 'Sano', 'nan': 'Sano', 'none': 'Sano'
             })
+            for idx in df.index:
+                if str(antes_diag.at[idx]).strip() != str(df.at[idx, 'diagnostico_preliminar']).strip():
+                    informe.registrar(
+                        df.at[idx, 'identificacion'], 'diagnostico_preliminar',
+                        antes_diag.at[idx], df.at[idx, 'diagnostico_preliminar'], 'ortografia'
+                    )
 
         # -----------------------------------------------------------------------------
         # 7. IMPUTACIÓN ESTADÍSTICA Y CASTING A MODELOS (models.py)
         # -----------------------------------------------------------------------------
-        # Moda (Categóricos)
+        def _imputar_serie(col, valor_imputacion, razon, cast_fn=None):
+            """Imputa nulos en una columna y registra cada cambio."""
+            if col not in df.columns:
+                df[col] = valor_imputacion
+                return
+            mascara_nulos = df[col].isna()
+            if mascara_nulos.any():
+                for idx in df[mascara_nulos].index:
+                    informe.registrar(
+                        df.at[idx, 'identificacion'], col,
+                        None, valor_imputacion, razon
+                    )
+            df[col] = df[col].fillna(valor_imputacion)
+            if cast_fn:
+                df[col] = df[col].apply(cast_fn)
+
+        # Sexo
+        antes_sexo = df.get('sexo', pd.Series(['O']*len(df))).copy()
         moda_sexo = df['sexo'].mode()[0] if 'sexo' in df.columns and not df['sexo'].mode().empty else 'O'
         df['sexo'] = df.get('sexo', pd.Series([moda_sexo]*len(df))).fillna(moda_sexo).apply(ex.limpiar_sexo)
+        for idx in df.index:
+            if str(antes_sexo.at[idx] if idx in antes_sexo.index else 'O') != str(df.at[idx, 'sexo']):
+                informe.registrar(df.at[idx, 'identificacion'], 'sexo',
+                                  antes_sexo.at[idx] if idx in antes_sexo.index else None,
+                                  df.at[idx, 'sexo'], 'normalizacion_sexo')
 
+        # Actividad física
+        antes_act = df.get('actividad_fisica', pd.Series(['Baja']*len(df))).copy()
         moda_act = df['actividad_fisica'].mode()[0] if 'actividad_fisica' in df.columns and not df['actividad_fisica'].mode().empty else 'Baja'
         df['actividad_fisica'] = df.get('actividad_fisica', pd.Series([moda_act]*len(df))).fillna(moda_act).apply(ex.limpiar_actividad)
+        for idx in df.index:
+            if str(antes_act.at[idx] if idx in antes_act.index else 'Baja') != str(df.at[idx, 'actividad_fisica']):
+                informe.registrar(df.at[idx, 'identificacion'], 'actividad_fisica',
+                                  antes_act.at[idx] if idx in antes_act.index else None,
+                                  df.at[idx, 'actividad_fisica'], 'normalizacion_activ')
 
-        # Reglas Clínicas / Categóricos por defecto
+        # Diagnóstico
         df['diagnostico_preliminar'] = df.get('diagnostico_preliminar', pd.Series(['Sano']*len(df))).fillna('Sano')
-        
+
         # Booleanos
-        df['fumador'] = df.get('fumador', pd.Series([False]*len(df))).fillna(False).apply(ex.limpiar_booleano)
-        df['consumo_alcohol'] = df.get('consumo_alcohol', pd.Series([False]*len(df))).fillna(False).apply(ex.limpiar_booleano)
-        df['antecedentes_familiares'] = df.get('antecedentes_familiares', pd.Series([False]*len(df))).fillna(False).apply(ex.limpiar_booleano)
+        for bool_col in ['fumador', 'consumo_alcohol', 'antecedentes_familiares']:
+            antes_b = df.get(bool_col, pd.Series([False]*len(df))).copy()
+            df[bool_col] = df.get(bool_col, pd.Series([False]*len(df))).fillna(False).apply(ex.limpiar_booleano)
+            for idx in df.index:
+                orig = antes_b.at[idx] if idx in antes_b.index else False
+                if str(orig) != str(df.at[idx, bool_col]):
+                    informe.registrar(df.at[idx, 'identificacion'], bool_col,
+                                      orig, df.at[idx, bool_col], 'normalizacion_bool')
 
-        # Enteros obligatorios para Django (PositiveSmallIntegerField)
-        df['presion_sistolica'] = df.get('presion_sistolica', pd.Series([120]*len(df))).fillna(120).astype(int)
-        df['presion_diastolica'] = df.get('presion_diastolica', pd.Series([80]*len(df))).fillna(80).astype(int)
-        df['frecuencia_cardiaca'] = df.get('frecuencia_cardiaca', pd.Series([70]*len(df))).fillna(70).astype(int)
-        
+        # Enteros — signos vitales críticos: NO imputar, solo castear los que ya tienen valor.
+        # Si llegó como texto ("Alto", "elevado") ya fue convertido a NaN en el paso 4.
+        # El NaN se preserva como None en BD. El médico verá ese campo vacío y sabrá
+        # que había un valor ilegible — el sistema no interpreta ni inventa el dato.
+        def _castear_entero_opcional(col):
+            """Convierte a int los valores numéricos presentes; deja NaN como None."""
+            if col not in df.columns:
+                df[col] = None
+                return
+            df[col] = pd.to_numeric(df[col], errors='coerce')  # garantiza numérico
+            df[col] = df[col].apply(lambda x: int(x) if pd.notna(x) else None)
+
+        def _castear_float_opcional(col):
+            """Convierte a float los valores numéricos presentes; deja NaN como None."""
+            if col not in df.columns:
+                df[col] = None
+                return
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            df[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else None)
+
+        # Signos vitales: texto cualitativo ya fue convertido en paso 3b.
+        # Los NaN que lleguen aquí son valores genuinamente ausentes → imputa con default clínico.
+        _imputar_serie('presion_sistolica',  120, 'imputacion_default', lambda x: int(float(x)))
+        _imputar_serie('presion_diastolica',  80, 'imputacion_default', lambda x: int(float(x)))
+        _imputar_serie('frecuencia_cardiaca', 70, 'imputacion_default', lambda x: int(float(x)))
+        _imputar_serie('glucosa',           90.0, 'imputacion_default')
+        _imputar_serie('saturacion_oxigeno',97.0, 'imputacion_default')
+
+        # Edad — sí se imputa con mediana porque es necesaria para el modelo ML
+        # y para la segmentación por grupos etarios del dashboard.
         mediana_edad = df['edad'].median() if 'edad' in df.columns and not pd.isna(df['edad'].median()) else 30
-        df['edad'] = df.get('edad', pd.Series([mediana_edad]*len(df))).fillna(mediana_edad).astype(int)
-
-        # Decimales permitidos en Django (DecimalField)
-        df['glucosa'] = df.get('glucosa', pd.Series([90.0]*len(df))).fillna(90.0)
-        df['saturacion_oxigeno'] = df.get('saturacion_oxigeno', pd.Series([97.0]*len(df))).fillna(97.0)
+        _imputar_serie('edad', int(mediana_edad), 'imputacion_mediana', lambda x: int(float(x)))
 
         mediana_peso = df['peso'].median() if 'peso' in df.columns and not pd.isna(df['peso'].median()) else 70.0
-        df['peso'] = df.get('peso', pd.Series([mediana_peso]*len(df))).fillna(mediana_peso)
+        _imputar_serie('peso', mediana_peso, 'imputacion_mediana')
 
         mediana_altura = df['altura'].median() if 'altura' in df.columns and not pd.isna(df['altura'].median()) else 1.70
-        df['altura'] = df.get('altura', pd.Series([mediana_altura]*len(df))).fillna(mediana_altura)
+        _imputar_serie('altura', mediana_altura, 'imputacion_mediana')
 
         media_col = df['colesterol'].mean() if 'colesterol' in df.columns and not pd.isna(df['colesterol'].mean()) else 180.0
-        df['colesterol'] = df.get('colesterol', pd.Series([media_col]*len(df))).fillna(media_col)
+        _imputar_serie('colesterol', media_col, 'imputacion_media')
 
         media_temp = df['temperatura'].mean() if 'temperatura' in df.columns and not pd.isna(df['temperatura'].mean()) else 36.6
-        df['temperatura'] = df.get('temperatura', pd.Series([media_temp]*len(df))).fillna(media_temp)
+        _imputar_serie('temperatura', media_temp, 'imputacion_media')
 
         # -----------------------------------------------------------------------------
         # 8. CÁLCULOS FINALES
@@ -349,7 +485,7 @@ class ETLRunView(APIView):
             'ignoradas': sorted(set(columnas_ignoradas)),
         }
 
-        return df, duplicados, invalidos, reporte_columnas
+        return df, duplicados, invalidos, reporte_columnas, informe.resumen()
 
     def _cargar(self, df):
         """
