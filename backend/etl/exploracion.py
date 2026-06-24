@@ -30,8 +30,8 @@ DEFAULTS = {
     'temperatura': 36.6,
     'glucosa': 90.0,
     'colesterol': 180.0,
-    'presion_sistolica': 120,
-    'presion_diastolica': 80,
+    'presion_sistolica': None,
+    'presion_diastolica': None,
     'frecuencia_cardiaca': 70,
     'saturacion_oxigeno': 97.0,
     'edad': 0,
@@ -166,15 +166,27 @@ def limpiar_float(valor, campo=None, default=None):
 
 def limpiar_presion(valor, campo='presion_sistolica'):
     """
-    Especializado para presión: maneja string 'Alta' → 140, 'Baja' → 90.
+    Especializado para presión: maneja texto cualitativo → valor numérico clínico.
+    Devuelve None si el valor es nulo, para que el ETL decida cómo imputar.
     """
     if es_nulo(valor):
-        return DEFAULTS.get(campo, 120)
+        return None  # No imponer un default aquí; lo maneja el pipeline ETL
     v_str = str(valor).strip().lower()
-    mapeo_texto = {'alta': 140, 'muy alta': 160, 'baja': 90, 'muy baja': 70, 'normal': 120}
-    if v_str in mapeo_texto:
-        return mapeo_texto[v_str]
-    return limpiar_entero(valor, default=DEFAULTS.get(campo, 120), campo=campo)
+    import unicodedata
+    v_norm = unicodedata.normalize('NFKD', v_str).encode('ascii', 'ignore').decode('utf-8')
+    mapeo = {
+        'muy baja': 75,   'muy bajo': 75,   'hipotension': 90,
+        'baja': 90,       'bajo': 90,
+        'normal': 115,    'optima': 115,    'saludable': 115,
+        'elevada': 135,   'elevado': 135,   'prehipertension': 135,  'limite': 135,
+        'alta': 150,      'alto': 150,      'hipertension': 150,
+        'alta presion': 150, 'presion alta': 150, 'tension alta': 150,
+        'muy alta': 170,  'muy alto': 170,  'hipertension severa': 170,
+        'crisis hipertensiva': 180,
+    }
+    if v_norm in mapeo:
+        return mapeo[v_norm]
+    return limpiar_entero(valor, default=None, campo=campo)
 
 
 def limpiar_booleano(valor):
@@ -241,14 +253,14 @@ def clasificar_riesgo(row):
             glucosa > 140,
             imc > 35,
             fumador and edad > 60,
-            antecedentes and (ps > 130 or glucosa > 120),
+            antecedentes and (ps > 130 or glucosa > 126),
         ])
         if puntos_alto >= 2:
             return 'Alto'
 
         # Criterios medios
         puntos_medio = sum([
-            ps > 120,
+            ps > 130,
             glucosa > 100,
             imc > 30,
             fumador,
